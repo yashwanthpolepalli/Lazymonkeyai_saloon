@@ -17,9 +17,11 @@
  * - /api/v1/settings (Customization, GST, MFA, Profile)
  */
 
-export const API_BASE_URL: string =
+const rawUrl: string =
   ((import.meta as any).env?.VITE_API_URL as string) ||
   ((import.meta as any).env?.PROD ? "/api/v1" : "http://localhost:8000/api/v1");
+
+export const API_BASE_URL: string = rawUrl.replace(/\/+$/, "");
 
 export interface ApiResponse<T> {
   success: boolean;
@@ -37,8 +39,9 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     ...options.headers,
   };
 
+  const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
   try {
-    const res = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const res = await fetch(`${API_BASE_URL}${cleanEndpoint}`, {
       ...options,
       headers,
     });
