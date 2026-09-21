@@ -17,7 +17,9 @@
  * - /api/v1/settings (Customization, GST, MFA, Profile)
  */
 
-export const API_BASE_URL = ((import.meta as any).env?.VITE_API_URL as string) || "http://localhost:8000/api/v1";
+export const API_BASE_URL: string =
+  ((import.meta as any).env?.VITE_API_URL as string) ||
+  ((import.meta as any).env?.PROD ? "/api/v1" : "http://localhost:8000/api/v1");
 
 export interface ApiResponse<T> {
   success: boolean;

@@ -59,11 +59,26 @@ def root_endpoint():
 
 @app.get("/api/v1/health", tags=["Health"])
 def health_check():
-    return {
-        "status": "healthy",
+    from sqlalchemy import text
+    from src.core.database import SessionLocal
+    
+    db_status = "connected"
+    db_error = None
+    try:
+        with SessionLocal() as session:
+            session.execute(text("SELECT 1"))
+    except Exception as e:
+        db_status = "error"
+        db_error = str(e)
+    
+    response = {
+        "status": "healthy" if db_status == "connected" else "degraded",
         "app": settings.APP_NAME,
-        "database": "connected"
+        "database": db_status
     }
+    if db_error:
+        response["database_error"] = db_error
+    return response
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
