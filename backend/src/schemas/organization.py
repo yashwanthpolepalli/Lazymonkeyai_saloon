@@ -2,28 +2,28 @@ from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 
 class PolicyConfigSchema(BaseModel):
-    multi_branch_enabled: bool = True
-    approval_required: bool = False
-    inventory_enabled: bool = True
-    central_warehouse_enabled: bool = False
-    payroll_enabled: bool = True
-    commission_enabled: bool = True
-    membership_enabled: bool = True
-    marketing_enabled: bool = True
-    audit_enabled: bool = True
-    internal_entitlement_mode: bool = False
-    budget_tracking_enabled: bool = False
-    pos_mode: str = "retail_pos" # retail_pos, enterprise_pos, institutional_allocation
-    departments: List[str] = ["Hair Styling", "Skin Care & Aesthetics", "Nail Studio", "Wellness & Spa"]
+    multi_branch_enabled: Optional[bool] = None
+    approval_required: Optional[bool] = None
+    inventory_enabled: Optional[bool] = None
+    central_warehouse_enabled: Optional[bool] = None
+    payroll_enabled: Optional[bool] = None
+    commission_enabled: Optional[bool] = None
+    membership_enabled: Optional[bool] = None
+    marketing_enabled: Optional[bool] = None
+    audit_enabled: Optional[bool] = None
+    internal_entitlement_mode: Optional[bool] = None
+    budget_tracking_enabled: Optional[bool] = None
+    pos_mode: Optional[str] = None # retail_pos, enterprise_pos, institutional_allocation
+    departments: Optional[List[str]] = None
 
 class OrganizationCreate(BaseModel):
     name: str
     code: str
-    business_type: str = "general" # general, enterprise_chain, institution_public, franchise
+    business_type: str # general, enterprise_chain, institution_public, franchise
     brand_tagline: Optional[str] = None
     logo: Optional[str] = None
-    currency: str = "INR"
-    tax_rate: float = 0.18
+    currency: Optional[str] = None
+    tax_rate: Optional[float] = None
     gstin_or_tax_id: Optional[str] = None
     cin_or_reg_number: Optional[str] = None
     email: Optional[str] = None
@@ -32,7 +32,7 @@ class OrganizationCreate(BaseModel):
     address: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
-    country: Optional[str] = "India"
+    country: Optional[str] = None
     policy_config: Optional[Dict[str, Any]] = None
 
 class OrganizationUpdate(BaseModel):
@@ -60,8 +60,8 @@ class OrganizationResponse(BaseModel):
     business_type: str
     brand_tagline: Optional[str] = None
     logo: Optional[str] = None
-    currency: str
-    tax_rate: float
+    currency: Optional[str] = None
+    tax_rate: Optional[float] = None
     gstin_or_tax_id: Optional[str] = None
     cin_or_reg_number: Optional[str] = None
     email: Optional[str] = None
@@ -72,7 +72,7 @@ class OrganizationResponse(BaseModel):
     state: Optional[str] = None
     country: Optional[str] = None
     is_active: bool
-    policy_config: Dict[str, Any]
+    policy_config: Optional[Dict[str, Any]] = None
 
     class Config:
         from_attributes = True
@@ -89,7 +89,7 @@ class ApprovalRequestCreate(BaseModel):
     beneficiary_name: Optional[str] = None
     beneficiary_id: Optional[str] = None
     department: Optional[str] = None
-    amount: float = 0.0
+    amount: Optional[float] = None
     metadata_payload: Optional[Dict[str, Any]] = None
 
 class ApprovalDecision(BaseModel):
@@ -110,7 +110,7 @@ class ApprovalRequestResponse(BaseModel):
     beneficiary_name: Optional[str] = None
     beneficiary_id: Optional[str] = None
     department: Optional[str] = None
-    amount: float
+    amount: Optional[float] = None
     status: str
     approver_id: Optional[str] = None
     approver_name: Optional[str] = None
@@ -125,8 +125,8 @@ class ApprovalRequestResponse(BaseModel):
 class AuditLogCreate(BaseModel):
     organization_id: Optional[str] = None
     user_id: Optional[str] = None
-    user_name: str = "System"
-    user_role: str = "user"
+    user_name: Optional[str] = None
+    user_role: Optional[str] = None
     action: str
     module: str
     entity_id: Optional[str] = None
@@ -137,8 +137,8 @@ class AuditLogResponse(BaseModel):
     id: str
     organization_id: str
     user_id: Optional[str] = None
-    user_name: str
-    user_role: str
+    user_name: Optional[str] = None
+    user_role: Optional[str] = None
     action: str
     module: str
     entity_id: Optional[str] = None
@@ -158,8 +158,8 @@ class ServiceAllocationCreate(BaseModel):
     cost_center: Optional[str] = None
     service_id: str
     service_name: str
-    quota_monthly: int = 2
-    unit_entitlement_value: float = 0.0
+    quota_monthly: int
+    unit_entitlement_value: Optional[float] = None
     valid_from: Optional[str] = None
     valid_to: Optional[str] = None
 
@@ -174,7 +174,7 @@ class ServiceAllocationResponse(BaseModel):
     service_name: str
     quota_monthly: int
     quota_used: int
-    unit_entitlement_value: float
+    unit_entitlement_value: Optional[float] = None
     valid_from: Optional[str] = None
     valid_to: Optional[str] = None
     status: str

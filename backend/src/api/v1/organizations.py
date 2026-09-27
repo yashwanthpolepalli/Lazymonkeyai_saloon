@@ -24,37 +24,14 @@ def create_organization(req: OrganizationCreate, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=400, detail=f"Organization with code '{req.code}' already exists")
 
-    # Default policy setup based on business_type
-    default_policy = {
-        "multi_branch_enabled": req.business_type in ["enterprise_chain", "institution_public", "franchise"],
-        "approval_required": req.business_type in ["institution_public", "enterprise_chain"],
-        "inventory_enabled": True,
-        "central_warehouse_enabled": req.business_type in ["enterprise_chain", "institution_public"],
-        "payroll_enabled": True,
-        "commission_enabled": req.business_type != "institution_public",
-        "membership_enabled": req.business_type != "institution_public",
-        "marketing_enabled": req.business_type != "institution_public",
-        "audit_enabled": True,
-        "internal_entitlement_mode": req.business_type == "institution_public",
-        "budget_tracking_enabled": req.business_type == "institution_public",
-        "pos_mode": "institutional_allocation" if req.business_type == "institution_public" else "retail_pos",
-        "departments": (
-            ["Executive Grooming", "Medical Spa", "Staff Welfare", "Departmental Quota"]
-            if req.business_type == "institution_public"
-            else ["Hair Styling", "Skin Care & Aesthetics", "Nail Studio", "Wellness & Spa"]
-        )
-    }
-
-    merged_policy = {**default_policy, **(req.policy_config or {})}
-
     org = Organization(
         name=req.name,
         code=req.code,
         business_type=req.business_type,
         brand_tagline=req.brand_tagline,
         logo=req.logo,
-        currency=req.currency,
-        tax_rate=req.tax_rate,
+        currency=req.currency or "USD",
+        tax_rate=req.tax_rate if req.tax_rate is not None else 0.0,
         gstin_or_tax_id=req.gstin_or_tax_id,
         cin_or_reg_number=req.cin_or_reg_number,
         email=req.email,
@@ -63,8 +40,8 @@ def create_organization(req: OrganizationCreate, db: Session = Depends(get_db)):
         address=req.address,
         city=req.city,
         state=req.state,
-        country=req.country or "India",
-        policy_config=merged_policy,
+        country=req.country,
+        policy_config=req.policy_config or {},
         is_active=True
     )
     db.add(org)
