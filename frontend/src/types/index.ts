@@ -1,4 +1,110 @@
-export type Role = "customer" | "owner" | "staff" | "admin";
+export type Role = "customer" | "owner" | "staff" | "admin" | "super_admin" | "director" | "branch_manager" | "cashier" | "auditor";
+
+export type BusinessType = "general" | "enterprise_chain" | "institution_public" | "franchise";
+
+export interface PolicyConfig {
+  multi_branch_enabled: boolean;
+  approval_required: boolean;
+  inventory_enabled: boolean;
+  central_warehouse_enabled: boolean;
+  payroll_enabled: boolean;
+  commission_enabled: boolean;
+  membership_enabled: boolean;
+  marketing_enabled: boolean;
+  audit_enabled: boolean;
+  internal_entitlement_mode: boolean;
+  budget_tracking_enabled: boolean;
+  pos_mode: "retail_pos" | "enterprise_pos" | "institutional_allocation" | string;
+  departments: string[];
+}
+
+export interface Organization {
+  id: string;
+  name: string;
+  code: string;
+  business_type: BusinessType;
+  brand_tagline?: string;
+  logo?: string;
+  currency: string;
+  tax_rate: number;
+  gstin_or_tax_id?: string;
+  cin_or_reg_number?: string;
+  email?: string;
+  phone?: string;
+  website?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  is_active: boolean;
+  policy_config: PolicyConfig;
+}
+
+export interface ApprovalRequest {
+  id: string;
+  organization_id: string;
+  branch_id?: string;
+  request_type: "service_eligibility" | "purchase_order" | "expense_claim" | "leave_request" | "price_override" | string;
+  title: string;
+  description?: string;
+  requested_by: string;
+  requested_by_id?: string;
+  beneficiary_name?: string;
+  beneficiary_id?: string;
+  department?: string;
+  amount: number;
+  status: "pending" | "approved" | "rejected" | "cancelled";
+  approver_id?: string;
+  approver_name?: string;
+  approver_notes?: string;
+  metadata_payload?: Record<string, any>;
+  created_at?: string;
+}
+
+export interface AuditLog {
+  id: string;
+  organization_id: string;
+  user_id?: string;
+  user_name: string;
+  user_role: string;
+  action: string;
+  module: string;
+  entity_id?: string;
+  ip_address?: string;
+  details?: Record<string, any>;
+  created_at?: string;
+}
+
+export interface ServiceAllocation {
+  id: string;
+  organization_id: string;
+  beneficiary_id: string;
+  beneficiary_name: string;
+  department?: string;
+  cost_center?: string;
+  service_id: string;
+  service_name: string;
+  quota_monthly: number;
+  quota_used: number;
+  unit_entitlement_value: number;
+  valid_from?: string;
+  valid_to?: string;
+  status: "active" | "expired" | "suspended" | string;
+}
+
+export interface AuthUser {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  organization_id?: string;
+  organization_name?: string;
+  business_type?: BusinessType;
+  policy_config?: PolicyConfig;
+  branch_id?: string;
+  department?: string;
+  avatar?: string;
+}
 
 export type GenderType = "women" | "men" | "kids" | "unisex";
 

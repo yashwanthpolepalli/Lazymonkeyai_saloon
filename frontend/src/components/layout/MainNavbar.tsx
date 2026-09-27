@@ -39,6 +39,11 @@ interface MainNavbarProps {
 export function MainNavbar({ onLogout }: MainNavbarProps) {
   const {
     activeRole,
+    currentUser,
+    currentOrganization,
+    organizations,
+    setOrganization,
+    policyConfig,
     selectedBranchId,
     setSelectedBranchId,
     selectedBranch,
@@ -53,50 +58,95 @@ export function MainNavbar({ onLogout }: MainNavbarProps) {
   } = useSalon();
 
   const [isBranchDropdownOpen, setIsBranchDropdownOpen] = useState(false);
+  const [isOrgDropdownOpen, setIsOrgDropdownOpen] = useState(false);
 
   // Role Metadata
   const roleMeta = {
     customer: {
-      title: "Customer Portal",
-      subtitle: "Booking, Memberships & Wallet",
+      title: "Customer & Beneficiary Portal",
+      subtitle: "Booking, Entitlements & Wallet",
       badgeColor: "bg-pink-50 border-pink-200 text-pink-700",
       icon: <Sparkles className="w-4 h-4 text-pink-600" />,
-      userTitle: currentCustomer.name,
+      userTitle: currentUser?.name || currentCustomer.name,
       userSubtitle: `${currentCustomer.membershipTier || "Gold"} VIP Member`,
-      avatarUrl: currentCustomer.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=160&q=80",
+      avatarUrl: currentUser?.avatar || currentCustomer.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=160&q=80",
     },
     owner: {
-      title: "Owner Portal",
-      subtitle: "POS, CRM, Staff, Branches & Settings",
+      title: `${currentOrganization.name} Suite`,
+      subtitle: `${currentOrganization.business_type.replace("_", " ").toUpperCase()} MODEL`,
       badgeColor: "bg-emerald-50 border-emerald-200 text-emerald-800",
       icon: <Crown className="w-4 h-4 text-emerald-600" />,
-      userTitle: ownerProfile?.name || "Salon Owner / Director",
-      userSubtitle: ownerProfile?.title || "Executive Management",
-      avatarUrl: ownerProfile?.avatarUrl || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=160&q=80",
+      userTitle: currentUser?.name || ownerProfile?.name || "Salon Director",
+      userSubtitle: `${currentOrganization.business_type.toUpperCase()} MANAGEMENT`,
+      avatarUrl: currentUser?.avatar || ownerProfile?.avatarUrl || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=160&q=80",
     },
     staff: {
-      title: "Staff Portal",
+      title: "Staff & Artisan Portal",
       subtitle: "Client Queue, Payrolls & Attendance",
       badgeColor: "bg-indigo-50 border-indigo-200 text-indigo-800",
       icon: <Scissors className="w-4 h-4 text-indigo-600" />,
-      userTitle: currentStaff.name || "Aria Sharma",
+      userTitle: currentUser?.name || currentStaff.name || "Aria Sharma",
       userSubtitle: `${currentStaff.tier?.toUpperCase() || "MASTER"} STYLIST`,
-      avatarUrl: currentStaff.avatar || "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=160&q=80",
+      avatarUrl: currentUser?.avatar || currentStaff.avatar || "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=160&q=80",
     },
     admin: {
       title: "Super Admin Console",
-      subtitle: "Franchise Network & Platform",
+      subtitle: "Global Multi-Tenant Platform",
       badgeColor: "bg-purple-50 border-purple-200 text-purple-800",
       icon: <Building2 className="w-4 h-4 text-purple-600" />,
-      userTitle: "Super Admin",
+      userTitle: currentUser?.name || "Platform Super Admin",
       userSubtitle: "Global Platform Oversight",
       avatarUrl: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=160&q=80",
     },
-  }[activeRole];
+    auditor: {
+      title: "Governance & Audit Desk",
+      subtitle: "Compliance & Trail Verification",
+      badgeColor: "bg-indigo-50 border-indigo-200 text-indigo-800",
+      icon: <ShieldCheck className="w-4 h-4 text-indigo-600" />,
+      userTitle: currentUser?.name || "Compliance Auditor",
+      userSubtitle: "Regulatory Compliance",
+      avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=160&q=80",
+    },
+    director: {
+      title: `${currentOrganization.name} Director`,
+      subtitle: "Enterprise Strategy & Operations",
+      badgeColor: "bg-amber-50 border-amber-200 text-amber-800",
+      icon: <Crown className="w-4 h-4 text-amber-600" />,
+      userTitle: currentUser?.name || "Executive Director",
+      userSubtitle: "Executive Management",
+      avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=160&q=80",
+    },
+    branch_manager: {
+      title: "Branch Manager Portal",
+      subtitle: "Facility Daily Operations",
+      badgeColor: "bg-blue-50 border-blue-200 text-blue-800",
+      icon: <Users className="w-4 h-4 text-blue-600" />,
+      userTitle: currentUser?.name || "Branch Lead",
+      userSubtitle: "Facility Management",
+      avatarUrl: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=160&q=80",
+    },
+    cashier: {
+      title: "Front Desk & POS Cashier",
+      subtitle: "Fast Billing & Checkout",
+      badgeColor: "bg-teal-50 border-teal-200 text-teal-800",
+      icon: <CreditCard className="w-4 h-4 text-teal-600" />,
+      userTitle: currentUser?.name || "Front Desk Cashier",
+      userSubtitle: "Billing & Reception",
+      avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=160&q=80",
+    },
+  }[activeRole] || {
+    title: "Salon Portal",
+    subtitle: "Salon Operating System",
+    badgeColor: "bg-slate-50 border-slate-200 text-slate-800",
+    icon: <Sparkles className="w-4 h-4 text-slate-600" />,
+    userTitle: currentUser?.name || "User",
+    userSubtitle: "Staff",
+    avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=160&q=80",
+  };
 
   // Role-Specific Horizontal Sub-Navigation Tabs with Multi-color Badge Icons
   const customerTabs = [
-    { id: "memberships", label: "Memberships & Validity", icon: <Crown className="w-4 h-4 text-amber-600" />, bg: "bg-amber-100 text-amber-700" },
+    { id: "memberships", label: "Memberships & Quota", icon: <Crown className="w-4 h-4 text-amber-600" />, bg: "bg-amber-100 text-amber-700" },
     { id: "booking", label: "Book Appointment", icon: <Calendar className="w-4 h-4 text-sky-600" />, bg: "bg-sky-100 text-sky-700" },
     { id: "services", label: "Services Catalog", icon: <Scissors className="w-4 h-4 text-violet-600" />, bg: "bg-violet-100 text-violet-700" },
     { id: "wallet", label: "Wallet & Rewards", icon: <Wallet className="w-4 h-4 text-emerald-600" />, bg: "bg-emerald-100 text-emerald-700" },
@@ -106,12 +156,13 @@ export function MainNavbar({ onLogout }: MainNavbarProps) {
 
   const ownerTabs = [
     { id: "dashboard", label: "Executive Dashboard", icon: <BarChart3 className="w-4 h-4 text-blue-600" />, bg: "bg-blue-100 text-blue-700" },
-    { id: "customers", label: "Customers (Create)", icon: <UserPlus className="w-4 h-4 text-rose-600" />, bg: "bg-rose-100 text-rose-700" },
-    { id: "staff", label: "Staff Management", icon: <Scissors className="w-4 h-4 text-purple-600" />, bg: "bg-purple-100 text-purple-700" },
+    { id: "customers", label: "CRM & Beneficiaries", icon: <UserPlus className="w-4 h-4 text-rose-600" />, bg: "bg-rose-100 text-rose-700" },
+    { id: "staff", label: "Staff & Payroll", icon: <Scissors className="w-4 h-4 text-purple-600" />, bg: "bg-purple-100 text-purple-700" },
     { id: "pos", label: "Payments & Billings", icon: <Receipt className="w-4 h-4 text-emerald-600" />, bg: "bg-emerald-100 text-emerald-700" },
     { id: "services", label: "Services Menu", icon: <Tag className="w-4 h-4 text-pink-600" />, bg: "bg-pink-100 text-pink-700" },
-    { id: "memberships", label: "Membership Plans", icon: <Crown className="w-4 h-4 text-amber-600" />, bg: "bg-amber-100 text-amber-700" },
+    { id: "memberships", label: "Memberships & Plans", icon: <Crown className="w-4 h-4 text-amber-600" />, bg: "bg-amber-100 text-amber-700" },
     { id: "inventory", label: "Inventory Stock", icon: <Package className="w-4 h-4 text-orange-600" />, bg: "bg-orange-100 text-orange-700" },
+    { id: "governance", label: "Governance & Policies", icon: <ShieldCheck className="w-4 h-4 text-indigo-600" />, bg: "bg-indigo-100 text-indigo-700" },
     { id: "settings", label: "Settings & System", icon: <Settings className="w-4 h-4 text-sky-600" />, bg: "bg-sky-100 text-sky-700" },
   ];
 
@@ -135,11 +186,11 @@ export function MainNavbar({ onLogout }: MainNavbarProps) {
   const currentTabs =
     activeRole === "customer"
       ? customerTabs
-      : activeRole === "owner"
-        ? ownerTabs
-        : activeRole === "staff"
-          ? staffTabs
-          : adminTabs;
+      : activeRole === "staff"
+      ? staffTabs
+      : activeRole === "admin"
+      ? adminTabs
+      : ownerTabs;
 
   return (
     <header className="sticky top-0 z-40 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/90 shadow-xs">
@@ -167,9 +218,56 @@ export function MainNavbar({ onLogout }: MainNavbarProps) {
                 {customizationSettings?.tagline || "LUXE SALON OPERATING SYSTEM"}
               </span>
             </div>
-          </div>
+          <div className="hidden xl:block h-6 w-px bg-slate-200 mx-1" />
 
-          <div className="hidden xl:block h-6 w-px bg-slate-200 mx-2" />
+          {/* Organization Selector Dropdown */}
+          <div className="relative hidden lg:block">
+            <button
+              onClick={() => setIsOrgDropdownOpen(!isOrgDropdownOpen)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-indigo-50/70 hover:bg-indigo-100/70 border border-indigo-200 text-indigo-900 text-xs font-semibold transition-all cursor-pointer"
+            >
+              <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+              <span className="truncate max-w-[140px] font-bold">{currentOrganization.name}</span>
+              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-indigo-200/60 text-indigo-950 uppercase font-extrabold">
+                {currentOrganization.business_type.replace("_", " ")}
+              </span>
+              <ChevronDown className="w-3 h-3 text-indigo-400" />
+            </button>
+
+            {isOrgDropdownOpen && (
+              <div
+                className="absolute left-0 mt-2 w-80 rounded-2xl bg-white border border-slate-200 shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150"
+                onMouseLeave={() => setIsOrgDropdownOpen(false)}
+              >
+                <div className="px-2.5 py-1.5 text-[10px] uppercase font-bold tracking-wider text-slate-400">
+                  Switch Active Organization Profile
+                </div>
+                {organizations.map((org) => (
+                  <button
+                    key={org.id}
+                    onClick={() => {
+                      setOrganization(org);
+                      setIsOrgDropdownOpen(false);
+                    }}
+                    className={cn(
+                      "w-full text-left p-2.5 rounded-xl flex items-start justify-between transition-colors cursor-pointer",
+                      org.id === currentOrganization.id
+                        ? "bg-indigo-50 border border-indigo-200 text-indigo-950 font-bold"
+                        : "hover:bg-slate-50 text-slate-700"
+                    )}
+                  >
+                    <div>
+                      <div className="text-xs font-bold text-slate-900">{org.name}</div>
+                      <div className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">{org.brand_tagline}</div>
+                    </div>
+                    <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-bold">
+                      {org.business_type.replace("_", " ")}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Branch Selector Dropdown */}
           <div className="relative hidden md:block">
@@ -178,7 +276,7 @@ export function MainNavbar({ onLogout }: MainNavbarProps) {
               className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold transition-all cursor-pointer"
             >
               <MapPin className="w-3.5 h-3.5 text-amber-500" />
-              <span className="truncate max-w-[160px]">{selectedBranch.name}</span>
+              <span className="truncate max-w-[140px]">{selectedBranch.name}</span>
               <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-100 text-amber-800">
                 {selectedBranch.code}
               </span>

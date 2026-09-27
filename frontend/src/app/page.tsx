@@ -76,6 +76,11 @@ const OwnerSettingsView = lazy(() =>
     default: m.OwnerSettingsView,
   }))
 );
+const GovernanceModule = lazy(() =>
+  import("@/components/owner/GovernanceModule").then((m) => ({
+    default: m.GovernanceModule,
+  }))
+);
 
 // Lazy-loaded Staff Role Views
 const StaffDashboardView = lazy(() =>
@@ -174,6 +179,7 @@ export default function Home() {
               {activeSubTab === "services" && <OwnerServicesView />}
               {activeSubTab === "memberships" && <OwnerMembershipsView />}
               {activeSubTab === "inventory" && <OwnerInventoryView />}
+              {activeSubTab === "governance" && <GovernanceModule />}
               {activeSubTab === "settings" && <OwnerSettingsView />}
               {![
                 "dashboard",
@@ -209,6 +215,7 @@ export default function Home() {
                 "services",
                 "memberships",
                 "inventory",
+                "governance",
                 "settings",
               ].includes(activeSubTab) && <OwnerDashboardView />}
             </>

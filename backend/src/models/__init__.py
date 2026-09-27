@@ -8,12 +8,16 @@ from src.models.inventory import InventoryProduct, StockMovement
 from src.models.hrms import Employee, AttendanceRecord, LeaveRequest, PayrollSlip
 from src.models.marketing import Lead, Campaign, Coupon
 from src.models.finance import FinancialExpense
-from src.models.customer_service import CustomerTicket
+from src.models.organization import Organization, ApprovalRequest, AuditLog, ServiceAllocation
 from src.models.settings import SalonSettings
 
 __all__ = [
     "Base",
     "TimeStampedModel",
+    "Organization",
+    "ApprovalRequest",
+    "AuditLog",
+    "ServiceAllocation",
     "Company",
     "User",
     "ERPInvoice",

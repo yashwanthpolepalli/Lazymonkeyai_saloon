@@ -17,12 +17,15 @@ class UserRegisterRequest(BaseModel):
     password: str
     name: str
     phone: Optional[str] = None
-    role: str = "staff" # admin, owner, staff, customer
+    role: str = "staff" # super_admin, director, branch_manager, cashier, staff, customer, auditor
+    organization_id: Optional[str] = None
     branch_id: Optional[str] = None
+    department: Optional[str] = None
 
 class UserLoginRequest(BaseModel):
     email: EmailStr
     password: str
+    organization_id: Optional[str] = None
 
 class UserResponse(BaseModel):
     id: str
@@ -30,7 +33,9 @@ class UserResponse(BaseModel):
     phone: Optional[str] = None
     name: str
     role: str
+    organization_id: Optional[str] = None
     branch_id: Optional[str] = None
+    department: Optional[str] = None
     avatar: Optional[str] = None
     is_active: bool
 

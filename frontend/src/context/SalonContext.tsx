@@ -26,6 +26,13 @@ import {
   GSTDiscountSettings,
   TimeSlotConfig,
   AppointmentStatus,
+  Organization,
+  BusinessType,
+  PolicyConfig,
+  ApprovalRequest,
+  AuditLog,
+  ServiceAllocation,
+  AuthUser,
 } from "@/types";
 import {
   MOCK_BRANCHES,
@@ -56,7 +63,12 @@ import {
   HRMSService,
   InventoryService,
   ERPService,
-  SettingsService
+  SettingsService,
+  OrganizationService,
+  ApprovalService,
+  AuditLogService,
+  AllocationService,
+  AuthService,
 } from "@/services/apiClient";
 
 
@@ -72,8 +84,7 @@ export type OwnerModule =
   | "analytics"
   | "customer-service"
   | "ai"
-  | "system";
-
+  | "governance"
 export interface ToastMessage {
   id: string;
   type: "success" | "info" | "warning" | "error";
@@ -81,10 +92,136 @@ export interface ToastMessage {
   message: string;
 }
 
+export const DEFAULT_POLICY_CONFIG: PolicyConfig = {
+  multi_branch_enabled: true,
+  approval_required: false,
+  inventory_enabled: true,
+  central_warehouse_enabled: false,
+  payroll_enabled: true,
+  commission_enabled: true,
+  membership_enabled: true,
+  marketing_enabled: true,
+  audit_enabled: true,
+  internal_entitlement_mode: false,
+  budget_tracking_enabled: false,
+  pos_mode: "retail_pos",
+  departments: ["Hair Styling", "Skin Care & Aesthetics", "Nail Studio", "Wellness & Spa"],
+};
+
+export const DEFAULT_ORGANIZATIONS: Organization[] = [
+  {
+    id: "org_general",
+    name: "Aura Luxe Salon & Studio",
+    code: "AURA_GEN",
+    business_type: "general",
+    brand_tagline: "Bespoke Hairstyling & Local Esthetics Sanctuary",
+    logo: "https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=200&q=80",
+    currency: "INR",
+    tax_rate: 0.18,
+    gstin_or_tax_id: "27AAAAA0000A1Z5",
+    is_active: true,
+    policy_config: {
+      ...DEFAULT_POLICY_CONFIG,
+      multi_branch_enabled: false,
+      approval_required: false,
+      central_warehouse_enabled: false,
+      internal_entitlement_mode: false,
+      pos_mode: "retail_pos",
+      departments: ["Hair Styling", "Skin Care", "Nail Bar"],
+    },
+  },
+  {
+    id: "org_enterprise",
+    name: "LazyMonkey AI Luxury Chains",
+    code: "LM_CHAIN",
+    business_type: "enterprise_chain",
+    brand_tagline: "Premier Multi-Branch Luxury Salon & Wellness Enterprise",
+    logo: "https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=200&q=80",
+    currency: "INR",
+    tax_rate: 0.18,
+    gstin_or_tax_id: "29BBBBB1111B2Z8",
+    is_active: true,
+    policy_config: {
+      ...DEFAULT_POLICY_CONFIG,
+      multi_branch_enabled: true,
+      approval_required: true,
+      central_warehouse_enabled: true,
+      budget_tracking_enabled: true,
+      pos_mode: "enterprise_pos",
+      departments: ["Hair Couture", "Skin & Aesthetics", "Nail Sanctuary", "VIP Suites"],
+    },
+  },
+  {
+    id: "org_institution",
+    name: "State Wellness & Public Grooming Facility",
+    code: "GOV_INST_01",
+    business_type: "institution_public",
+    brand_tagline: "Institutional Employee Welfare & Beneficiary Care Center",
+    logo: "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&w=200&q=80",
+    currency: "INR",
+    tax_rate: 0.0,
+    is_active: true,
+    policy_config: {
+      ...DEFAULT_POLICY_CONFIG,
+      multi_branch_enabled: true,
+      approval_required: true,
+      central_warehouse_enabled: true,
+      commission_enabled: false,
+      membership_enabled: false,
+      marketing_enabled: false,
+      internal_entitlement_mode: true,
+      budget_tracking_enabled: true,
+      pos_mode: "institutional_allocation",
+      departments: ["Executive Grooming", "Medical Spa", "Staff Welfare", "Departmental Quota"],
+    },
+  },
+  {
+    id: "org_franchise",
+    name: "Velvet Crown Franchise Network",
+    code: "VELVET_FRAN",
+    business_type: "franchise",
+    brand_tagline: "Scalable Premium Franchise Operator Network",
+    logo: "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=200&q=80",
+    currency: "INR",
+    tax_rate: 0.18,
+    is_active: true,
+    policy_config: {
+      ...DEFAULT_POLICY_CONFIG,
+      multi_branch_enabled: true,
+      approval_required: true,
+      central_warehouse_enabled: true,
+      pos_mode: "enterprise_pos",
+      departments: ["Hair Styling", "Spa & Wellness", "Retail Hub"],
+    },
+  },
+];
+
 interface SalonContextType {
   // Navigation & Role State
   activeRole: Role;
   setActiveRole: (role: Role) => void;
+  currentUser: AuthUser | null;
+  setCurrentUser: (user: AuthUser | null) => void;
+  loginUser: (user: AuthUser, token?: string) => void;
+  logoutUser: () => void;
+
+  // Organization & Multi-Tenant Policy Engine
+  currentOrganization: Organization;
+  organizations: Organization[];
+  setOrganization: (org: Organization) => void;
+  policyConfig: PolicyConfig;
+  updatePolicyConfig: (updates: Partial<PolicyConfig>) => void;
+
+  // Governance & Institutional Workflows
+  approvals: ApprovalRequest[];
+  addApprovalRequest: (req: Partial<ApprovalRequest>) => Promise<void>;
+  decideApproval: (id: string, status: "approved" | "rejected", notes?: string) => Promise<void>;
+  auditLogs: AuditLog[];
+  recordAuditLog: (log: Partial<AuditLog>) => Promise<void>;
+  serviceAllocations: ServiceAllocation[];
+  addServiceAllocation: (alloc: Partial<ServiceAllocation>) => Promise<void>;
+  consumeAllocation: (id: string) => Promise<void>;
+
   selectedBranchId: string;
   setSelectedBranchId: (id: string) => void;
   selectedBranch: Branch;
@@ -181,15 +318,26 @@ interface SalonContextType {
   createTicket: (ticket: Omit<CustomerTicket, "id" | "ticketNumber" | "createdAt">) => void;
   replyToTicket: (ticketId: string, text: string, senderRole: "customer" | "staff" | "manager") => void;
 
-  // Feedback Toasts
-  toasts: ToastMessage[];
-  addToast: (type: ToastMessage["type"], title: string, message: string) => void;
-  removeToast: (id: string) => void;
-}
-
 export const defaultSalonContext: SalonContextType = {
   activeRole: "owner",
   setActiveRole: () => {},
+  currentUser: null,
+  setCurrentUser: () => {},
+  loginUser: () => {},
+  logoutUser: () => {},
+  currentOrganization: DEFAULT_ORGANIZATIONS[0],
+  organizations: DEFAULT_ORGANIZATIONS,
+  setOrganization: () => {},
+  policyConfig: DEFAULT_ORGANIZATIONS[0].policy_config,
+  updatePolicyConfig: () => {},
+  approvals: [],
+  addApprovalRequest: async () => {},
+  decideApproval: async () => {},
+  auditLogs: [],
+  recordAuditLog: async () => {},
+  serviceAllocations: [],
+  addServiceAllocation: async () => {},
+  consumeAllocation: async () => {},
   selectedBranchId: "br_mumbai",
   setSelectedBranchId: () => {},
   selectedBranch: {} as Branch,
@@ -294,6 +442,32 @@ const loadFromStorage = <T,>(key: string, fallback: T): T => {
 
 export function SalonProvider({ children }: { children: React.ReactNode }) {
   const [activeRole, setActiveRole] = useState<Role>("owner");
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(() =>
+    loadFromStorage("salon_current_user", null)
+  );
+
+  // Dynamic Organizations and Policy Config
+  const [organizations, setOrganizations] = useState<Organization[]>(() =>
+    loadFromStorage("salon_organizations", DEFAULT_ORGANIZATIONS)
+  );
+  const [currentOrganization, setCurrentOrganization] = useState<Organization>(() =>
+    loadFromStorage("salon_current_organization", DEFAULT_ORGANIZATIONS[0])
+  );
+  const [policyConfig, setPolicyConfig] = useState<PolicyConfig>(() =>
+    loadFromStorage("salon_policy_config", DEFAULT_ORGANIZATIONS[0].policy_config)
+  );
+
+  // Governance & Workflows state
+  const [approvals, setApprovals] = useState<ApprovalRequest[]>(() =>
+    loadFromStorage("salon_approvals", [])
+  );
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() =>
+    loadFromStorage("salon_audit_logs", [])
+  );
+  const [serviceAllocations, setServiceAllocations] = useState<ServiceAllocation[]>(() =>
+    loadFromStorage("salon_service_allocations", [])
+  );
+
   const [selectedBranchId, setSelectedBranchId] = useState<string>("br_mumbai");
   const [activeModule, setActiveModule] = useState<OwnerModule>("workspace");
   const [activeSubTab, setActiveSubTab] = useState<string>("overview");
@@ -451,6 +625,10 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
           remoteInventory,
           remoteEmployees,
           remoteInvoices,
+          remoteOrgs,
+          remoteApprovals,
+          remoteAuditLogs,
+          remoteAllocations,
         ] = await Promise.allSettled([
           BranchService.getBranches(),
           SalonCatalogService.getServices(),
@@ -460,6 +638,10 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
           InventoryService.getItems(),
           HRMSService.getStaffRoster(),
           ERPService.getInvoices(50),
+          OrganizationService.getOrganizations(),
+          ApprovalService.getApprovals(),
+          AuditLogService.getAuditLogs(),
+          AllocationService.getAllocations(),
         ]);
 
         if (remoteBranches.status === "fulfilled" && remoteBranches.value?.length) {
@@ -485,6 +667,23 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
         }
         if (remoteInvoices.status === "fulfilled" && remoteInvoices.value?.length) {
           setInvoices(remoteInvoices.value);
+        }
+        if (remoteOrgs.status === "fulfilled" && remoteOrgs.value?.length) {
+          setOrganizations(remoteOrgs.value);
+          // Set current org if not explicitly set
+          if (!currentOrganization || !currentOrganization.id) {
+            setCurrentOrganization(remoteOrgs.value[0]);
+            setPolicyConfig(remoteOrgs.value[0].policy_config || DEFAULT_POLICY_CONFIG);
+          }
+        }
+        if (remoteApprovals.status === "fulfilled" && remoteApprovals.value?.length) {
+          setApprovals(remoteApprovals.value);
+        }
+        if (remoteAuditLogs.status === "fulfilled" && remoteAuditLogs.value?.length) {
+          setAuditLogs(remoteAuditLogs.value);
+        }
+        if (remoteAllocations.status === "fulfilled" && remoteAllocations.value?.length) {
+          setServiceAllocations(remoteAllocations.value);
         }
       } catch (err) {
         console.debug("Backend offline, utilizing local reactive state.", err);
@@ -705,6 +904,231 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
       }
     }
   }, [timeSlots]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("salon_organizations", JSON.stringify(organizations));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, [organizations]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("salon_current_organization", JSON.stringify(currentOrganization));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, [currentOrganization]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("salon_policy_config", JSON.stringify(policyConfig));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, [policyConfig]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("salon_current_user", JSON.stringify(currentUser));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("salon_approvals", JSON.stringify(approvals));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, [approvals]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("salon_audit_logs", JSON.stringify(auditLogs));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, [auditLogs]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("salon_service_allocations", JSON.stringify(serviceAllocations));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, [serviceAllocations]);
+
+  const setOrganization = (org: Organization) => {
+    setCurrentOrganization(org);
+    if (org.policy_config) {
+      setPolicyConfig(org.policy_config);
+    }
+    addToast("info", "Organization Switched", `Active profile: ${org.name} (${org.business_type.toUpperCase()})`);
+  };
+
+  const updatePolicyConfig = async (updates: Partial<PolicyConfig>) => {
+    const updated = { ...policyConfig, ...updates };
+    setPolicyConfig(updated);
+    if (currentOrganization?.id) {
+      const updatedOrg = { ...currentOrganization, policy_config: updated };
+      setCurrentOrganization(updatedOrg);
+      setOrganizations((prev) => prev.map((o) => (o.id === updatedOrg.id ? updatedOrg : o)));
+      OrganizationService.updateOrganization(currentOrganization.id, { policy_config: updated }).catch(() => {});
+    }
+    addToast("success", "Policy Engine Updated", "Dynamic operational rules and module permissions applied.");
+  };
+
+  const addApprovalRequest = async (req: Partial<ApprovalRequest>) => {
+    const newReq: ApprovalRequest = {
+      id: generateId("appr"),
+      organization_id: currentOrganization?.id || "org_default",
+      branch_id: selectedBranchId,
+      request_type: req.request_type || "service_eligibility",
+      title: req.title || "Request for Authorization",
+      description: req.description || "",
+      requested_by: currentUser?.name || ownerProfile.name || "Staff Member",
+      requested_by_id: currentUser?.id,
+      beneficiary_name: req.beneficiary_name,
+      beneficiary_id: req.beneficiary_id,
+      department: req.department || policyConfig.departments?.[0] || "General",
+      amount: req.amount || 0,
+      status: "pending",
+      metadata_payload: req.metadata_payload || {},
+      created_at: new Date().toISOString(),
+    };
+    setApprovals((prev) => [newReq, ...prev]);
+    ApprovalService.createApproval(newReq).catch(() => {});
+    addToast("info", "Approval Request Submitted", `Request "${newReq.title}" queued for managerial review.`);
+  };
+
+  const decideApproval = async (id: string, status: "approved" | "rejected", notes?: string) => {
+    const approverName = currentUser?.name || ownerProfile.name || "Administrator";
+    setApprovals((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              status,
+              approver_name: approverName,
+              approver_id: currentUser?.id,
+              approver_notes: notes || `Marked as ${status}`,
+            }
+          : item
+      )
+    );
+    ApprovalService.decideApproval(id, {
+      status,
+      approver_name: approverName,
+      approver_id: currentUser?.id,
+      approver_notes: notes,
+    }).catch(() => {});
+
+    recordAuditLog({
+      action: `APPROVAL_${status.toUpperCase()}`,
+      module: "GOVERNANCE",
+      entity_id: id,
+      details: { status, notes, approver: approverName },
+    });
+
+    addToast(
+      status === "approved" ? "success" : "warning",
+      `Request ${status === "approved" ? "Approved" : "Rejected"}`,
+      `Request decision recorded with compliance audit log.`
+    );
+  };
+
+  const recordAuditLog = async (log: Partial<AuditLog>) => {
+    const newLog: AuditLog = {
+      id: generateId("aud"),
+      organization_id: currentOrganization?.id || "org_default",
+      user_id: currentUser?.id,
+      user_name: currentUser?.name || ownerProfile.name || "System User",
+      user_role: activeRole,
+      action: log.action || "SYSTEM_EVENT",
+      module: log.module || "WORKSPACE",
+      entity_id: log.entity_id,
+      ip_address: "127.0.0.1",
+      details: log.details || {},
+      created_at: new Date().toISOString(),
+    };
+    setAuditLogs((prev) => [newLog, ...prev]);
+    AuditLogService.recordAuditLog(newLog).catch(() => {});
+  };
+
+  const addServiceAllocation = async (alloc: Partial<ServiceAllocation>) => {
+    const newAlloc: ServiceAllocation = {
+      id: generateId("alloc"),
+      organization_id: currentOrganization?.id || "org_default",
+      beneficiary_id: alloc.beneficiary_id || generateId("ben"),
+      beneficiary_name: alloc.beneficiary_name || "Beneficiary",
+      department: alloc.department || policyConfig.departments?.[0] || "General",
+      cost_center: alloc.cost_center || "CC-101",
+      service_id: alloc.service_id || (services[0]?.id || "srv_default"),
+      service_name: alloc.service_name || (services[0]?.name || "Standard Care"),
+      quota_monthly: alloc.quota_monthly || 2,
+      quota_used: 0,
+      unit_entitlement_value: alloc.unit_entitlement_value || 0,
+      valid_from: new Date().toISOString().split("T")[0],
+      valid_to: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+      status: "active",
+    };
+    setServiceAllocations((prev) => [newAlloc, ...prev]);
+    AllocationService.createAllocation(newAlloc).catch(() => {});
+    addToast("success", "Entitlement Allocated", `Assigned ${newAlloc.quota_monthly} monthly quotas of ${newAlloc.service_name} to ${newAlloc.beneficiary_name}`);
+  };
+
+  const consumeAllocation = async (id: string) => {
+    setServiceAllocations((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, quota_used: item.quota_used + 1 } : item))
+    );
+    AllocationService.consumeAllocation(id).catch(() => {});
+    addToast("info", "Entitlement Consumed", "Service quota deducted from institutional cost center.");
+  };
+
+  const loginUser = (user: AuthUser, token?: string) => {
+    setCurrentUser(user);
+    if (token && typeof window !== "undefined") {
+      localStorage.setItem("auth_token", token);
+    }
+    if (user.role) {
+      setActiveRole(user.role);
+    }
+    if (user.organization_id) {
+      const foundOrg = organizations.find((o) => o.id === user.organization_id);
+      if (foundOrg) {
+        setCurrentOrganization(foundOrg);
+        if (foundOrg.policy_config) setPolicyConfig(foundOrg.policy_config);
+      }
+    }
+    if (user.branch_id) {
+      setSelectedBranchId(user.branch_id);
+    }
+  };
+
+  const logoutUser = () => {
+    setCurrentUser(null);
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("auth_token");
+    }
+    addToast("info", "Signed Out", "You have successfully logged out.");
+  };
 
   const selectedBranch = useMemo(() => {
     return branches.find((b) => b.id === selectedBranchId) || branches[0] || MOCK_BRANCHES[0];
@@ -1604,6 +2028,23 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
       value={{
         activeRole,
         setActiveRole,
+        currentUser,
+        setCurrentUser,
+        loginUser,
+        logoutUser,
+        currentOrganization,
+        organizations,
+        setOrganization,
+        policyConfig,
+        updatePolicyConfig,
+        approvals,
+        addApprovalRequest,
+        decideApproval,
+        auditLogs,
+        recordAuditLog,
+        serviceAllocations,
+        addServiceAllocation,
+        consumeAllocation,
         selectedBranchId,
         setSelectedBranchId,
         selectedBranch,

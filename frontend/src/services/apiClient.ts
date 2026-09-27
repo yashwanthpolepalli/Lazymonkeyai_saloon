@@ -60,13 +60,22 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 
 // 1. Auth Service
 export const AuthService = {
-  login: (credentials: { email: string; password: string }) =>
+  login: (credentials: { email: string; password: string; organization_id?: string }) =>
     request<{ access_token: string; token_type: string; expires_in: number; user: any }>("/auth/login", {
       method: "POST",
       body: JSON.stringify(credentials),
     }),
 
-  register: (userData: { email: string; password: string; name: string; phone?: string; role?: string }) =>
+  register: (userData: {
+    email: string;
+    password: string;
+    name: string;
+    phone?: string;
+    role?: string;
+    organization_id?: string;
+    branch_id?: string;
+    department?: string;
+  }) =>
     request<{ access_token: string; token_type: string; expires_in: number; user: any }>("/auth/register", {
       method: "POST",
       body: JSON.stringify(userData),
@@ -329,5 +338,78 @@ export const SettingsService = {
     request<any>("/settings/mfa", {
       method: "PUT",
       body: JSON.stringify(data),
+    }),
+};
+
+// 11. Organizations & Policy Configuration Service
+export const OrganizationService = {
+  getOrganizations: () => request<any[]>("/organizations"),
+  createOrganization: (orgData: any) =>
+    request<any>("/organizations", {
+      method: "POST",
+      body: JSON.stringify(orgData),
+    }),
+  getOrganization: (orgId: string) => request<any>(`/organizations/${orgId}`),
+  updateOrganization: (orgId: string, orgData: any) =>
+    request<any>(`/organizations/${orgId}`, {
+      method: "PUT",
+      body: JSON.stringify(orgData),
+    }),
+};
+
+// 12. Approval Workflow Service
+export const ApprovalService = {
+  getApprovals: (organizationId?: string, status?: string) => {
+    const params = new URLSearchParams();
+    if (organizationId) params.append("organization_id", organizationId);
+    if (status) params.append("status", status);
+    const qs = params.toString();
+    return request<any[]>(`/approvals${qs ? `?${qs}` : ""}`);
+  },
+  createApproval: (approvalData: any) =>
+    request<any>("/approvals", {
+      method: "POST",
+      body: JSON.stringify(approvalData),
+    }),
+  decideApproval: (approvalId: string, decision: { status: string; approver_name: string; approver_id?: string; approver_notes?: string }) =>
+    request<any>(`/approvals/${approvalId}/decision`, {
+      method: "POST",
+      body: JSON.stringify(decision),
+    }),
+};
+
+// 13. Audit Log Service
+export const AuditLogService = {
+  getAuditLogs: (organizationId?: string, module?: string, limit: number = 50) => {
+    const params = new URLSearchParams();
+    if (organizationId) params.append("organization_id", organizationId);
+    if (module) params.append("module", module);
+    params.append("limit", limit.toString());
+    return request<any[]>(`/audit-logs?${params.toString()}`);
+  },
+  recordAuditLog: (logData: any) =>
+    request<any>("/audit-logs", {
+      method: "POST",
+      body: JSON.stringify(logData),
+    }),
+};
+
+// 14. Service Allocations & Entitlement Service (Government / Institutional)
+export const AllocationService = {
+  getAllocations: (organizationId?: string, beneficiaryId?: string) => {
+    const params = new URLSearchParams();
+    if (organizationId) params.append("organization_id", organizationId);
+    if (beneficiaryId) params.append("beneficiary_id", beneficiaryId);
+    const qs = params.toString();
+    return request<any[]>(`/allocations${qs ? `?${qs}` : ""}`);
+  },
+  createAllocation: (allocData: any) =>
+    request<any>("/allocations", {
+      method: "POST",
+      body: JSON.stringify(allocData),
+    }),
+  consumeAllocation: (allocationId: string) =>
+    request<any>(`/allocations/${allocationId}/consume`, {
+      method: "POST",
     }),
 };

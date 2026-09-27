@@ -32,15 +32,18 @@ class User(TimeStampedModel):
     phone = Column(String(50), unique=True, index=True, nullable=True)
     password_hash = Column(String(255), nullable=False)
     name = Column(String(255), nullable=False)
-    role = Column(String(50), default="staff", nullable=False) # admin, owner, staff, customer
+    role = Column(String(50), default="staff", nullable=False) # super_admin, director, branch_manager, cashier, staff, customer, auditor
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True)
     company_id = Column(String(36), ForeignKey("companies.id", ondelete="SET NULL"), nullable=True)
     branch_id = Column(String(36), ForeignKey("branches.id", ondelete="SET NULL"), nullable=True)
+    department = Column(String(100), nullable=True)
     avatar = Column(String(500), nullable=True)
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=True)
     mfa_enabled = Column(Boolean, default=False)
     mfa_secret = Column(String(255), nullable=True)
 
+    organization = relationship("Organization", back_populates="users")
     company = relationship("Company", back_populates="users")
     branch = relationship("Branch", foreign_keys=[branch_id])
 

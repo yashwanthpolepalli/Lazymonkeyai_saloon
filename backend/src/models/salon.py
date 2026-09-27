@@ -30,6 +30,9 @@ class Branch(TimeStampedModel):
     opening_hours = Column(String(255), default="09:00 AM - 09:00 PM")
     is_active = Column(Boolean, default=True)
 
+    organization_id = Column(String(36), ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True)
+    organization = relationship("Organization", back_populates="branches")
+
     company_id = Column(String(36), ForeignKey("companies.id", ondelete="SET NULL"), nullable=True)
     company = relationship("Company", back_populates="branches")
     
