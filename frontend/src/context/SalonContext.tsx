@@ -85,6 +85,8 @@ export type OwnerModule =
   | "customer-service"
   | "ai"
   | "governance"
+  | "system";
+
 export interface ToastMessage {
   id: string;
   type: "success" | "info" | "warning" | "error";
@@ -317,6 +319,11 @@ interface SalonContextType {
   clockOutEmployee: (employeeId: string) => void;
   createTicket: (ticket: Omit<CustomerTicket, "id" | "ticketNumber" | "createdAt">) => void;
   replyToTicket: (ticketId: string, text: string, senderRole: "customer" | "staff" | "manager") => void;
+
+  // Global Toast & Notification System
+  toasts: ToastMessage[];
+  addToast: (type: "success" | "error" | "info" | "warning", title: string, description?: string) => void;
+  removeToast: (id: string) => void;
 }
 
 export const defaultSalonContext: SalonContextType = {

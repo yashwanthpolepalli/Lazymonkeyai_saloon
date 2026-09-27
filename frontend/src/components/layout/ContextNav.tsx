@@ -147,6 +147,12 @@ export function ContextNav() {
       { id: "pricing_ai", label: "Dynamic Pricing Engine", icon: <Percent className="w-3.5 h-3.5" /> },
       { id: "scheduler_ai", label: "Smart Schedule Balancer", icon: <Sliders className="w-3.5 h-3.5" /> },
     ],
+    governance: [
+      { id: "policy_config", label: "Enterprise Policies", icon: <Shield className="w-3.5 h-3.5" /> },
+      { id: "approvals_inbox", label: "Approvals Inbox", icon: <Award className="w-3.5 h-3.5" /> },
+      { id: "audit_trail", label: "Audit Logs", icon: <FileCode className="w-3.5 h-3.5" /> },
+      { id: "entitlements", label: "Allocations & Grants", icon: <Layers className="w-3.5 h-3.5" /> },
+    ],
     system: [
       { id: "branches_config", label: "Branches & Chairs", icon: <Building className="w-3.5 h-3.5" /> },
       { id: "roles", label: "Roles & Permissions", icon: <Shield className="w-3.5 h-3.5" /> },

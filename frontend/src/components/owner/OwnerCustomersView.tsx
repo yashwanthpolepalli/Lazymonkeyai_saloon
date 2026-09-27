@@ -20,6 +20,7 @@ import {
   Filter,
   FileSpreadsheet,
   Download,
+  Sparkles,
 } from "lucide-react";
 import { Customer } from "@/types";
 import { DataImportModal } from "@/components/common/DataImportModal";
