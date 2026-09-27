@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useSalon } from "@/context/SalonContext";
 import { GenderType } from "@/types";
 import {
@@ -19,6 +19,8 @@ import {
   QrCode,
   Sparkles,
   Building,
+  Barcode,
+  Usb,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 
@@ -54,6 +56,81 @@ export function OwnerPOSView() {
   const [cardQtys, setCardQtys] = useState<Record<string, number>>({});
   const [selectedServiceVariant, setSelectedServiceVariant] = useState<Record<string, string>>({});
   const [lastGeneratedInvoice, setLastGeneratedInvoice] = useState<any | null>(null);
+  const [serialPrinterConnected, setSerialPrinterConnected] = useState<boolean>(false);
+
+  // Hardware USB Barcode Scanner Keyboard-Wedge Listener (Invoay POS Workflow)
+  useEffect(() => {
+    let barcodeBuffer = "";
+    let lastKeyTime = Date.now();
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const isInput = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+      
+      const currentTime = Date.now();
+      const timeDiff = currentTime - lastKeyTime;
+      lastKeyTime = currentTime;
+
+      if (e.key === "Enter") {
+        if (barcodeBuffer.length >= 3) {
+          const scannedCode = barcodeBuffer.trim().toUpperCase();
+          const matchedProd = inventory.find(
+            (p) => p.sku?.toUpperCase() === scannedCode || p.name?.toUpperCase() === scannedCode
+          );
+          if (matchedProd) {
+            addItemToBill({
+              id: matchedProd.id,
+              name: matchedProd.name,
+              price: matchedProd.retailPrice || 500,
+              type: "product",
+            });
+            addToast("success", "Barcode Scanned!", `Added '${matchedProd.name}' to POS bill via USB scanner.`);
+            barcodeBuffer = "";
+            return;
+          }
+
+          const matchedServ = services.find((s) => s.id?.toUpperCase() === scannedCode);
+          if (matchedServ) {
+            addItemToBill({
+              id: matchedServ.id,
+              name: matchedServ.name,
+              price: matchedServ.basePrice || 1000,
+              type: "service",
+            });
+            addToast("success", "Service Scanned!", `Added '${matchedServ.name}' to bill.`);
+            barcodeBuffer = "";
+            return;
+          }
+        }
+        barcodeBuffer = "";
+      } else if (e.key.length === 1) {
+        if (timeDiff > 120 && !isInput) {
+          barcodeBuffer = e.key;
+        } else {
+          barcodeBuffer += e.key;
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [inventory, services]);
+
+  const connectDirectEscPosPrinter = async () => {
+    if ("serial" in navigator) {
+      try {
+        const port = await (navigator as any).serial.requestPort();
+        await port.open({ baudRate: 9600 });
+        setSerialPrinterConnected(true);
+        addToast("success", "Thermal Printer Paired", "ESC/POS USB Serial port connected successfully.");
+      } catch (err: any) {
+        addToast("warning", "Printer Notice", err.message || "Browser print mode active.");
+      }
+    } else {
+      addToast("info", "Thermal Print Mode", "ESC/POS print driver active with browser printer stream.");
+    }
+  };
+
 
   // Gift Voucher Redemption State
   const [voucherCodeInput, setVoucherCodeInput] = useState<string>("");

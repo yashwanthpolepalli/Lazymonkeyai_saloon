@@ -67,6 +67,12 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: Optional[str] = None
     GEMINI_API_KEY: Optional[str] = None
 
+    # Google Calendar Two-Way Sync OAuth (Dynamically loaded from .env)
+    GOOGLE_CLIENT_ID: Optional[str] = None
+    GOOGLE_CLIENT_SECRET: Optional[str] = None
+    GOOGLE_REDIRECT_URI: Optional[str] = None
+
+
     @property
     def cors_origin_list(self) -> List[str]:
         if not self.CORS_ORIGINS:

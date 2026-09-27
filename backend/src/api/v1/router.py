@@ -14,8 +14,10 @@ from src.api.v1.notifications import router as notifications_router
 from src.api.v1.system_settings import router as settings_router
 from src.api.v1.organizations import router as organizations_router
 from src.api.v1.stations import router as stations_router
+from src.api.v1.calendar_sync import router as calendar_sync_router
 
 # CRM Sub-Routers
+
 from src.api.v1.crm_modules.customers import router as crm_customers_router, wallet_router as crm_wallet_router
 from src.api.v1.crm_modules.memberships import router as crm_memberships_router
 from src.api.v1.crm_modules.loyalty import router as crm_loyalty_router
@@ -67,8 +69,10 @@ api_v1_router.include_router(notifications_router)
 api_v1_router.include_router(settings_router)
 api_v1_router.include_router(organizations_router)
 api_v1_router.include_router(stations_router)
+api_v1_router.include_router(calendar_sync_router)
 
 # Include CRM Routers
+
 api_v1_router.include_router(crm_customers_router)
 api_v1_router.include_router(crm_wallet_router)
 api_v1_router.include_router(crm_memberships_router)

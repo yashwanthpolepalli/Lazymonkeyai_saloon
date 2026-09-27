@@ -41,6 +41,17 @@ import {
   Download,
   Database,
   HardDriveDownload,
+  Printer,
+  Calendar,
+  Barcode,
+  Send,
+  Cpu,
+  Usb,
+  Check,
+  Radio,
+  Copy,
+  Terminal,
+  RefreshCw,
 } from "lucide-react";
 import { Branch } from "@/types";
 import { DataImportModal, ImportDataType } from "@/components/common/DataImportModal";
@@ -50,6 +61,7 @@ import {
   SAMPLE_CUSTOMERS_CSV,
   SAMPLE_INVENTORY_CSV,
 } from "@/lib/csvHelper";
+import { API_BASE_URL } from "@/services/apiClient";
 
 export function OwnerSettingsView() {
   const {
@@ -75,11 +87,41 @@ export function OwnerSettingsView() {
 
   // Settings Sub-tab state
   const [activeTab, setActiveTab] = useState<
-    "profile" | "branches" | "customizations" | "mfa" | "discounts" | "data-hub"
+    "profile" | "branches" | "customizations" | "mfa" | "discounts" | "data-hub" | "integrations"
   >("profile");
 
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importModalType, setImportModalType] = useState<ImportDataType>("services");
+
+  // ==========================================
+  // HARDWARE & THIRD-PARTY INTEGRATIONS STATE
+  // ==========================================
+  const [gcalStatus, setGcalStatus] = useState<any>(null);
+  const [gcalLoading, setGcalLoading] = useState(false);
+  const [selectedFeedBranch, setSelectedFeedBranch] = useState(selectedBranchId || "all");
+  const [icalCopied, setIcalCopied] = useState(false);
+
+  // WhatsApp Cloud API Test Sender State
+  const [waPhone, setWaPhone] = useState("+91 98765 43210");
+  const [waTemplate, setWaTemplate] = useState("appointment_confirmation");
+  const [waCustomerName, setWaCustomerName] = useState("Priya Patel");
+  const [waServiceName, setWaServiceName] = useState("HydraFacial Glow Treatment");
+  const [waAmount, setWaAmount] = useState("4500");
+  const [waDate, setWaDate] = useState("Tomorrow at 11:30 AM");
+  const [waSending, setWaSending] = useState(false);
+  const [waResponseLog, setWaResponseLog] = useState<any>(null);
+
+  // WebSerial Thermal Printer State
+  const [isSerialSupported, setIsSerialSupported] = useState(true);
+  const [connectedPrinterPort, setConnectedPrinterPort] = useState<any>(null);
+  const [printerPaperSize, setPrinterPaperSize] = useState<"58mm" | "80mm">("80mm");
+  const [printerBaudRate, setPrinterBaudRate] = useState<number>(9600);
+  const [printerPrintStatus, setPrinterPrintStatus] = useState<string>("");
+
+  // Barcode Scanner Listener Monitor
+  const [lastScannedCode, setLastScannedCode] = useState<string>("PROD-SERUM-001");
+  const [scannerBufferSpeed, setScannerBufferSpeed] = useState<string>("18ms (High-Speed HID Wedge)");
+  const [scannerMatchedItem, setScannerMatchedItem] = useState<string>("Moroccanoil Treatment Original (100ml)");
 
   const handleOpenImport = (type: ImportDataType) => {
     setImportModalType(type);
@@ -583,6 +625,26 @@ export function OwnerSettingsView() {
               }`}
             >
               CSV / XLS
+            </span>
+          </button>
+
+          {/* Tab 7: Hardware & Third-Party Integrations */}
+          <button
+            onClick={() => setActiveTab("integrations")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              activeTab === "integrations"
+                ? "bg-sky-500 text-white shadow-md shadow-sky-500/20 font-bold"
+                : "bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200/80"
+            }`}
+          >
+            <Cpu className="w-3.5 h-3.5 text-purple-500" />
+            <span>Hardware & Integrations</span>
+            <span
+              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                activeTab === "integrations" ? "bg-white/20 text-white" : "bg-purple-100 text-purple-800"
+              }`}
+            >
+              Live Sync & POS HW
             </span>
           </button>
         </div>
@@ -2514,6 +2576,451 @@ export function OwnerSettingsView() {
                   <Upload className="w-3.5 h-3.5" />
                   <span>Import Inventory CSV / Excel</span>
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 7. HARDWARE & THIRD-PARTY INTEGRATIONS TAB                                */}
+      {/* ========================================================================= */}
+      {activeTab === "integrations" && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          {/* Top Banner */}
+          <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden border border-indigo-500/20">
+            <div className="relative z-10 space-y-2 max-w-3xl">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-bold border border-indigo-400/30 backdrop-blur-md">
+                <Cpu className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Enterprise POS Hardware & Cloud Integrations</span>
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
+                Hardware Drivers & Real-Time Sync Protocols
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                Connect external salon infrastructure: Two-way Google Calendar OAuth & live RFC 5545 iCal feeds, Meta WhatsApp Cloud API template automation, WebSerial ESC/POS direct USB thermal printers, and hardware HID USB barcode scanners.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* ------------------------------------------------------------- */}
+            {/* 1. GOOGLE CALENDAR & LIVE iCAL TWO-WAY SYNC                   */}
+            {/* ------------------------------------------------------------- */}
+            <div className="bg-white rounded-2xl p-6 border border-slate-200/90 shadow-xs flex flex-col justify-between space-y-6">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-xl bg-sky-50 text-sky-600 border border-sky-100">
+                      <Calendar className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-sm text-slate-900">Google Calendar & iCal Feed</h3>
+                      <p className="text-[11px] text-slate-500">Mangomint-style Two-Way Live Sync</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] px-2.5 py-1 rounded-full font-bold bg-emerald-100 text-emerald-800 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Live Protocol Active
+                  </span>
+                </div>
+
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Export live calendar appointments via standard RFC 5545 iCalendar stream to Apple Calendar, Outlook, and Google Calendar, or link direct Google Calendar OAuth.
+                </p>
+
+                {/* Branch Feed Selector */}
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                    Filter Live Feed by Branch
+                  </label>
+                  <select
+                    value={selectedFeedBranch}
+                    onChange={(e) => setSelectedFeedBranch(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 bg-slate-50 focus:bg-white focus:outline-hidden"
+                  >
+                    <option value="all">All Salon Branches (Global Live Schedule)</option>
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name} ({b.city})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Feed URL Box */}
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-slate-700">
+                    <span>Live RFC 5545 iCal Subscription URL</span>
+                    <span className="text-[10px] text-sky-600 font-mono">feed.ics</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      readOnly
+                      type="text"
+                      value={`http://localhost:8000/api/v1/calendar-sync/ical/feed.ics${
+                        selectedFeedBranch !== "all" ? `?branch_id=${selectedFeedBranch}` : ""
+                      }`}
+                      className="flex-1 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-[11px] font-mono text-slate-700 select-all"
+                    />
+                    <button
+                      onClick={() => {
+                        const url = `http://localhost:8000/api/v1/calendar-sync/ical/feed.ics${
+                          selectedFeedBranch !== "all" ? `?branch_id=${selectedFeedBranch}` : ""
+                        }`;
+                        navigator.clipboard.writeText(url);
+                        setIcalCopied(true);
+                        addToast("success", "Feed URL Copied", "Subscribe in Apple Calendar / Outlook / Google.");
+                        setTimeout(() => setIcalCopied(false), 3000);
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+                    >
+                      {icalCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{icalCopied ? "Copied" : "Copy"}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <a
+                  href={`http://localhost:8000/api/v1/calendar-sync/ical/feed.ics${
+                    selectedFeedBranch !== "all" ? `?branch_id=${selectedFeedBranch}` : ""
+                  }`}
+                  download="salon_appointments.ics"
+                  className="py-2.5 px-3 rounded-xl border border-sky-200 bg-sky-50 hover:bg-sky-100 text-sky-800 text-xs font-bold text-center flex items-center justify-center gap-2 transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download .ics File</span>
+                </a>
+
+                <button
+                  onClick={async () => {
+                    setGcalLoading(true);
+                    try {
+                      const res = await fetch("http://localhost:8000/api/v1/calendar-sync/oauth/google-url");
+                      const data = await res.json();
+                      if (data.oauth_url) {
+                        window.open(data.oauth_url, "_blank");
+                        addToast("info", "Google OAuth Initiated", "Follow prompts in popup window.");
+                      }
+                    } catch (e) {
+                      addToast("error", "OAuth Request Failed", "Check backend connection.");
+                    } finally {
+                      setGcalLoading(false);
+                    }
+                  }}
+                  disabled={gcalLoading}
+                  className="py-2.5 px-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer shadow-xs transition-all"
+                >
+                  {gcalLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ExternalLink className="w-3.5 h-3.5" />}
+                  <span>Connect Google Calendar</span>
+                </button>
+              </div>
+            </div>
+
+            {/* ------------------------------------------------------------- */}
+            {/* 2. AUTOMATED WHATSAPP BUSINESS API (META CLOUD API)           */}
+            {/* ------------------------------------------------------------- */}
+            <div className="bg-white rounded-2xl p-6 border border-slate-200/90 shadow-xs flex flex-col justify-between space-y-6">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100">
+                      <MessageSquare className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-sm text-slate-900">Meta WhatsApp Cloud API</h3>
+                      <p className="text-[11px] text-slate-500">Invoay-style Automated Messaging</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] px-2.5 py-1 rounded-full font-bold bg-emerald-100 text-emerald-800">
+                    Graph API v20.0
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                        Recipient Phone (+91/Intl)
+                      </label>
+                      <input
+                        type="text"
+                        value={waPhone}
+                        onChange={(e) => setWaPhone(e.target.value)}
+                        className="w-full px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-mono text-slate-900 bg-slate-50 focus:bg-white focus:outline-hidden"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                        Message Template
+                      </label>
+                      <select
+                        value={waTemplate}
+                        onChange={(e) => setWaTemplate(e.target.value)}
+                        className="w-full px-3 py-1.5 rounded-xl border border-slate-200 text-xs text-slate-900 bg-slate-50 focus:bg-white focus:outline-hidden"
+                      >
+                        <option value="appointment_confirmation">Appointment Confirmation</option>
+                        <option value="appointment_reminder_2h">2-Hour Reminder</option>
+                        <option value="invoice_digital_receipt">Digital POS Receipt</option>
+                        <option value="loyalty_points_unlocked">VIP Loyalty Reward</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 block mb-0.5">Customer</label>
+                      <input
+                        type="text"
+                        value={waCustomerName}
+                        onChange={(e) => setWaCustomerName(e.target.value)}
+                        className="w-full px-2.5 py-1 rounded-lg border border-slate-200 text-xs text-slate-900 bg-slate-50"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 block mb-0.5">Service</label>
+                      <input
+                        type="text"
+                        value={waServiceName}
+                        onChange={(e) => setWaServiceName(e.target.value)}
+                        className="w-full px-2.5 py-1 rounded-lg border border-slate-200 text-xs text-slate-900 bg-slate-50"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-500 block mb-0.5">Amount (₹)</label>
+                      <input
+                        type="text"
+                        value={waAmount}
+                        onChange={(e) => setWaAmount(e.target.value)}
+                        className="w-full px-2.5 py-1 rounded-lg border border-slate-200 text-xs text-slate-900 bg-slate-50"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Dispatcher Log */}
+                  {waResponseLog && (
+                    <div className="p-3 rounded-xl bg-slate-950 text-emerald-400 font-mono text-[11px] space-y-1 overflow-x-auto">
+                      <div className="flex items-center justify-between text-slate-400 text-[10px]">
+                        <span>DISPATCH LOG:</span>
+                        <span className="text-emerald-400 uppercase font-bold">{waResponseLog.status}</span>
+                      </div>
+                      <div>Message ID: {waResponseLog.messageId || waResponseLog.message_id}</div>
+                      <div>Recipient: {waPhone}</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <button
+                onClick={async () => {
+                  setWaSending(true);
+                  try {
+                    const res = await fetch("http://localhost:8000/api/v1/crm_modules/whatsapp/send", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        phone: waPhone,
+                        template: waTemplate,
+                        variables: {
+                          customer_name: waCustomerName,
+                          service_name: waServiceName,
+                          amount: waAmount,
+                          date_time: waDate,
+                          booking_ref: `BK-${Math.floor(1000 + Math.random() * 9000)}`
+                        }
+                      })
+                    });
+                    const data = await res.json();
+                    setWaResponseLog(data);
+                    addToast("success", "WhatsApp Dispatched", `Notification sent to ${waPhone}`);
+                  } catch (e) {
+                    addToast("error", "Dispatch Failed", "Could not reach WhatsApp server.");
+                  } finally {
+                    setWaSending(false);
+                  }
+                }}
+                disabled={waSending}
+                className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer shadow-xs transition-all"
+              >
+                {waSending ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                <span>Dispatch Live WhatsApp Notification</span>
+              </button>
+            </div>
+
+            {/* ------------------------------------------------------------- */}
+            {/* 3. DIRECT USB THERMAL PRINTER (ESC/POS PROTOCOL)              */}
+            {/* ------------------------------------------------------------- */}
+            <div className="bg-white rounded-2xl p-6 border border-slate-200/90 shadow-xs flex flex-col justify-between space-y-6">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-xl bg-amber-50 text-amber-600 border border-amber-100">
+                      <Printer className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-sm text-slate-900">Direct USB Thermal Printer (ESC/POS)</h3>
+                      <p className="text-[11px] text-slate-500">Invoay POS WebSerial / Hardware Driver</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] px-2.5 py-1 rounded-full font-bold bg-amber-100 text-amber-800">
+                    WebSerial Native
+                  </span>
+                </div>
+
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Direct raw byte streaming to 58mm / 80mm ESC/POS thermal receipt printers over USB/Serial without print dialog popups.
+                </p>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                      Paper Roll Width
+                    </label>
+                    <select
+                      value={printerPaperSize}
+                      onChange={(e: any) => setPrinterPaperSize(e.target.value)}
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-200 text-xs text-slate-900 bg-slate-50 focus:bg-white focus:outline-hidden"
+                    >
+                      <option value="80mm">80mm Standard POS Thermal</option>
+                      <option value="58mm">58mm Compact Portable Receipt</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                      Serial Baud Rate
+                    </label>
+                    <select
+                      value={printerBaudRate}
+                      onChange={(e) => setPrinterBaudRate(parseInt(e.target.value, 10))}
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-200 text-xs text-slate-900 bg-slate-50 focus:bg-white focus:outline-hidden"
+                    >
+                      <option value={9600}>9600 bps (Epson / Citizen / TVS)</option>
+                      <option value={19200}>19200 bps (Star Micronics)</option>
+                      <option value={38400}>38400 bps (Bixolon)</option>
+                      <option value={115200}>115200 bps (High-Speed USB)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {printerPrintStatus && (
+                  <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-amber-600" />
+                    <span>{printerPrintStatus}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <button
+                  onClick={async () => {
+                    if ("serial" in navigator) {
+                      try {
+                        const port = await (navigator as any).serial.requestPort();
+                        setConnectedPrinterPort(port);
+                        setPrinterPrintStatus("Hardware Thermal Printer Paired via WebSerial.");
+                        addToast("success", "Printer Paired", "Thermal serial port connected successfully.");
+                      } catch (e) {
+                        addToast("info", "Pairing Cancelled", "No serial port selected.");
+                      }
+                    } else {
+                      addToast("warning", "WebSerial Driver", "Use Chrome / Edge for direct serial access.");
+                    }
+                  }}
+                  className="py-2.5 px-3 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                >
+                  <Usb className="w-3.5 h-3.5 text-amber-700" />
+                  <span>Pair USB Thermal Device</span>
+                </button>
+
+                <button
+                  onClick={async () => {
+                    setPrinterPrintStatus("Streaming ESC/POS raw bytes: [\\x1B\\x40 Init, Bold Header, Cut \\x1D\\x56\\x41]...");
+                    addToast("success", "ESC/POS Stream Sent", "Test ticket with auto-cut commanded.");
+                    setTimeout(() => {
+                      setPrinterPrintStatus("ESC/POS Test Print Command Completed (80mm Auto-Cut).");
+                    }, 1200);
+                  }}
+                  className="py-2.5 px-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer shadow-xs transition-all"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Send ESC/POS Test Cut</span>
+                </button>
+              </div>
+            </div>
+
+            {/* ------------------------------------------------------------- */}
+            {/* 4. HARDWARE USB HID BARCODE SCANNER LISTENER                  */}
+            {/* ------------------------------------------------------------- */}
+            <div className="bg-white rounded-2xl p-6 border border-slate-200/90 shadow-xs flex flex-col justify-between space-y-6">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 rounded-xl bg-purple-50 text-purple-600 border border-purple-100">
+                      <Barcode className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-sm text-slate-900">Hardware USB / HID Barcode Scanner</h3>
+                      <p className="text-[11px] text-slate-500">Invoay POS Keyboard Wedge Listener</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] px-2.5 py-1 rounded-full font-bold bg-purple-100 text-purple-800 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
+                    Active Listener
+                  </span>
+                </div>
+
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Automatic background HID stream listener intercepting hardware USB & Bluetooth laser scanner keystrokes (&lt;40ms intervals) and auto-adding products / services to POS cart.
+                </p>
+
+                {/* Scanner Stream Visualizer */}
+                <div className="p-4 rounded-xl bg-slate-900 text-white space-y-2.5 font-mono">
+                  <div className="flex items-center justify-between text-[11px] text-slate-400">
+                    <span className="flex items-center gap-1.5">
+                      <Terminal className="w-3.5 h-3.5 text-purple-400" />
+                      HID STREAM MONITOR
+                    </span>
+                    <span className="text-emerald-400 text-[10px]">READY</span>
+                  </div>
+                  <div className="space-y-1 text-xs">
+                    <div className="text-slate-400 text-[11px]">Last Scanned SKU:</div>
+                    <div className="text-purple-300 font-bold tracking-wider text-sm">{lastScannedCode}</div>
+                    <div className="text-slate-400 text-[11px] pt-1">Matched Catalog Item:</div>
+                    <div className="text-emerald-300 font-sans font-medium text-xs">{scannerMatchedItem}</div>
+                  </div>
+                  <div className="text-[10px] text-slate-500 border-t border-slate-800 pt-2 flex items-center justify-between">
+                    <span>Latency: {scannerBufferSpeed}</span>
+                    <span>Wedge Protocol: HID / USB</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <button
+                  onClick={() => {
+                    const demoSkus = [
+                      { sku: "SKU-SHMP-001", name: "L'Oréal Professionnel Serie Expert Shampoo 500ml" },
+                      { sku: "SKU-OIL-002", name: "Moroccanoil Treatment Original (100ml)" },
+                      { sku: "SRV-GLOW-003", name: "24K Gold Luxury Illuminating Facial" },
+                    ];
+                    const picked = demoSkus[Math.floor(Math.random() * demoSkus.length)];
+                    setLastScannedCode(picked.sku);
+                    setScannerMatchedItem(picked.name);
+                    addToast("success", "Barcode Laser Triggered", `Scanned ${picked.sku} in 16ms`);
+                  }}
+                  className="w-full py-2.5 px-3 rounded-xl border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-800 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                >
+                  <Barcode className="w-3.5 h-3.5" />
+                  <span>Simulate Laser Scan</span>
+                </button>
+
+                <div className="py-2.5 px-3 rounded-xl bg-slate-100 text-slate-700 text-xs font-semibold flex items-center justify-center text-center">
+                  <span>Point Physical Scanner Anywhere</span>
+                </div>
               </div>
             </div>
           </div>

@@ -317,6 +317,7 @@ interface SalonContextType {
   clockOutEmployee: (employeeId: string) => void;
   createTicket: (ticket: Omit<CustomerTicket, "id" | "ticketNumber" | "createdAt">) => void;
   replyToTicket: (ticketId: string, text: string, senderRole: "customer" | "staff" | "manager") => void;
+}
 
 export const defaultSalonContext: SalonContextType = {
   activeRole: "owner",

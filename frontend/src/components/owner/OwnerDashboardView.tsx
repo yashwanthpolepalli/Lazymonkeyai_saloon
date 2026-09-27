@@ -36,6 +36,10 @@ import {
   CheckSquare,
   Square,
   Zap,
+  Copy,
+  ExternalLink,
+  Download,
+  Check,
 } from "lucide-react";
 import {
   AreaChart,
@@ -86,6 +90,9 @@ export function OwnerDashboardView() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [showSlotModal, setShowSlotModal] = useState(false);
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  const [showCalendarSyncModal, setShowCalendarSyncModal] = useState(false);
+  const [gcalLoading, setGcalLoading] = useState(false);
+  const [icalCopied, setIcalCopied] = useState(false);
   const [targetApt, setTargetApt] = useState<any>(null);
   const [rescheduleDate, setRescheduleDate] = useState(
     new Date().toISOString().split("T")[0]
@@ -462,6 +469,14 @@ export function OwnerDashboardView() {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowCalendarSyncModal(true)}
+            className="px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs transition-all"
+          >
+            <Calendar className="w-4 h-4" />
+            <span>Sync Google / iCal</span>
+          </button>
+
           <button
             onClick={() => setShowSlotModal(true)}
             className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs transition-all"
@@ -1392,6 +1407,99 @@ export function OwnerDashboardView() {
                 className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold cursor-pointer shadow-xs"
               >
                 Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Calendar Two-Way Live Sync Modal */}
+      {showCalendarSyncModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 border border-slate-200 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-sky-50 text-sky-600 border border-sky-100">
+                  <Calendar className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900">Calendar Two-Way Sync</h3>
+                  <p className="text-xs text-slate-500">Google Calendar, Apple iCal & Outlook</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowCalendarSyncModal(false)}
+                className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Synchronize live appointments for <strong>{selectedBranch.name}</strong> directly into your external calendar app using real-time RFC 5545 stream or Google Calendar OAuth.
+            </p>
+
+            {/* iCal Subscription URL Box */}
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+              <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+                <span>Live RFC 5545 iCal Feed URL</span>
+                <span className="text-[10px] text-sky-600 font-mono">feed.ics</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  readOnly
+                  type="text"
+                  value={`http://localhost:8000/api/v1/calendar-sync/ical/feed.ics?branch_id=${selectedBranch.id}`}
+                  className="flex-1 px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-mono text-slate-700 select-all"
+                />
+                <button
+                  onClick={() => {
+                    const url = `http://localhost:8000/api/v1/calendar-sync/ical/feed.ics?branch_id=${selectedBranch.id}`;
+                    navigator.clipboard.writeText(url);
+                    setIcalCopied(true);
+                    addToast("success", "Feed URL Copied", "Subscribe in Apple Calendar / Outlook / Google.");
+                    setTimeout(() => setIcalCopied(false), 3000);
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+                >
+                  {icalCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{icalCopied ? "Copied" : "Copy"}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <a
+                href={`http://localhost:8000/api/v1/calendar-sync/ical/feed.ics?branch_id=${selectedBranch.id}`}
+                download="salon_appointments.ics"
+                className="py-2.5 px-3 rounded-xl border border-sky-200 bg-sky-50 hover:bg-sky-100 text-sky-800 text-xs font-bold text-center flex items-center justify-center gap-2 transition-colors"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Download .ics</span>
+              </a>
+
+              <button
+                onClick={async () => {
+                  setGcalLoading(true);
+                  try {
+                    const res = await fetch(`http://localhost:8000/api/v1/calendar-sync/oauth/google-url?branch_id=${selectedBranch.id}`);
+                    const data = await res.json();
+                    if (data.oauth_url) {
+                      window.open(data.oauth_url, "_blank");
+                      addToast("info", "Google OAuth Initiated", "Follow prompts in popup window.");
+                    }
+                  } catch (e) {
+                    addToast("error", "OAuth Request Failed", "Check backend connection.");
+                  } finally {
+                    setGcalLoading(false);
+                  }
+                }}
+                disabled={gcalLoading}
+                className="py-2.5 px-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer shadow-xs transition-all"
+              >
+                {gcalLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ExternalLink className="w-3.5 h-3.5" />}
+                <span>Google OAuth 2.0</span>
               </button>
             </div>
           </div>

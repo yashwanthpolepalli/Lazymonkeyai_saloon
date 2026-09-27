@@ -218,6 +218,7 @@ export function MainNavbar({ onLogout }: MainNavbarProps) {
                 {customizationSettings?.tagline || "LUXE SALON OPERATING SYSTEM"}
               </span>
             </div>
+          </div>
           <div className="hidden xl:block h-6 w-px bg-slate-200 mx-1" />
 
           {/* Organization Selector Dropdown */}

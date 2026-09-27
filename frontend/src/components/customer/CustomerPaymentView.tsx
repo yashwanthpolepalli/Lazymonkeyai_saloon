@@ -28,6 +28,8 @@ export function CustomerPaymentView() {
     removeFromCart,
     currentCustomer,
     selectedBranch,
+    services,
+    stylists,
     addToast,
     setActiveSubTab,
   } = useSalon();
@@ -41,30 +43,19 @@ export function CustomerPaymentView() {
   const [isPaid, setIsPaid] = useState<boolean>(false);
   const [lastInvoiceId, setLastInvoiceId] = useState<string>("");
 
-  // Default items if cart is empty so the user can test payment immediately
+  // Dynamically resolve items from real services if cart is empty
   const activeItems =
     cart.length > 0
       ? cart
-      : [
-          {
-            id: "mock_c1",
-            type: "service" as const,
-            name: "Signature Balayage & Olaplex Hair Spa",
-            basePrice: 5500,
-            durationMinutes: 90,
-            stylistName: "Aria Sharma (Master Stylist)",
-            finalPrice: 5500,
-          },
-          {
-            id: "mock_c2",
-            type: "service" as const,
-            name: "24K Gold Luxury Illuminating Facial",
-            basePrice: 3800,
-            durationMinutes: 60,
-            stylistName: "Aria Sharma (Master Stylist)",
-            finalPrice: 3800,
-          },
-        ];
+      : services.slice(0, 2).map((srv, idx) => ({
+          id: srv.id,
+          type: "service" as const,
+          name: srv.name,
+          basePrice: srv.basePrice,
+          durationMinutes: srv.durationMinutes,
+          stylistName: stylists[idx % (stylists.length || 1)]?.name || "Senior Stylist",
+          finalPrice: srv.basePrice,
+        }));
 
   const subtotal = activeItems.reduce(
     (sum, item) => sum + (item.finalPrice || item.basePrice),
