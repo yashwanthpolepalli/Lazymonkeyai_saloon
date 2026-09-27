@@ -55,6 +55,44 @@ export function OwnerPOSView() {
   const [selectedServiceVariant, setSelectedServiceVariant] = useState<Record<string, string>>({});
   const [lastGeneratedInvoice, setLastGeneratedInvoice] = useState<any | null>(null);
 
+  // Gift Voucher Redemption State
+  const [voucherCodeInput, setVoucherCodeInput] = useState<string>("");
+  const [appliedVoucherAmount, setAppliedVoucherAmount] = useState<number>(0);
+  const [appliedVoucherCode, setAppliedVoucherCode] = useState<string | null>(null);
+
+  // Cash Register & Petty Cash State
+  const [openingFloat] = useState<number>(5000);
+  const [isPettyCashOpen, setIsPettyCashOpen] = useState<boolean>(false);
+  const [isCloseShiftOpen, setIsCloseShiftOpen] = useState<boolean>(false);
+  const [closingCashInput, setClosingCashInput] = useState<string>("");
+  const [shiftReport, setShiftReport] = useState<any | null>(null);
+
+  // Petty Cash Payouts State
+  const [pettyCashCategory, setPettyCashCategory] = useState("Tea & Refreshments");
+  const [pettyCashAmount, setPettyCashAmount] = useState(250);
+  const [pettyCashPaidTo, setPettyCashPaidTo] = useState("Local Vendor");
+  const [pettyCashApprovedBy, setPettyCashApprovedBy] = useState("Store Manager");
+  const [pettyCashList, setPettyCashList] = useState<any[]>([
+    {
+      id: "pc_01",
+      voucher_no: "PETTY-8491",
+      category: "Tea & Refreshments",
+      amount: 180,
+      date: "2026-03-27 11:30",
+      paid_to: "Chai Express",
+      approved_by: "Store Manager",
+    },
+    {
+      id: "pc_02",
+      voucher_no: "PETTY-8492",
+      category: "Salon Cleaning & Laundry",
+      amount: 350,
+      date: "2026-03-27 14:15",
+      paid_to: "Quick Clean Drycleaners",
+      approved_by: "Store Manager",
+    },
+  ]);
+
   const activeCustomer = customers.find((c) => c.id === selectedCustomerId) || customers[0];
 
   const subtotal = cartItems.reduce((sum, item) => sum + item.price * (item.qty || 1), 0);
@@ -62,7 +100,8 @@ export function OwnerPOSView() {
   
   const effectiveDiscountPercent = gstSettings.isDiscountEnabled ? discountPercent : 0;
   const discountAmount = Math.round((subtotal * effectiveDiscountPercent) / 100);
-  const taxableAmount = Math.max(0, subtotal - discountAmount);
+  
+  const taxableAmount = Math.max(0, subtotal - discountAmount - appliedVoucherAmount);
   
   const isSgstActive = gstSettings.isGstEnabled && (gstSettings.isSgstEnabled ?? true);
   const isCgstActive = gstSettings.isGstEnabled && (gstSettings.isCgstEnabled ?? true);
@@ -80,6 +119,60 @@ export function OwnerPOSView() {
 
   const taxAmount = sgstAmount + cgstAmount + igstAmount;
   const finalTotal = taxableAmount + taxAmount;
+
+  // Petty cash total
+  const totalPettyCash = pettyCashList.reduce((sum, p) => sum + (p.amount || 0), 0);
+
+  const handleApplyVoucher = () => {
+    if (!voucherCodeInput.trim()) {
+      addToast("warning", "Code Required", "Please enter a gift voucher or pass code.");
+      return;
+    }
+    const code = voucherCodeInput.trim().toUpperCase();
+    if (code.includes("GLOW") || code.includes("GV") || code.includes("FESTIVE")) {
+      const discountVal = 1000;
+      setAppliedVoucherAmount(discountVal);
+      setAppliedVoucherCode(code);
+      addToast("success", "Voucher Redeemed", `Applied ₹${discountVal} voucher discount from code ${code}.`);
+    } else {
+      addToast("error", "Invalid Voucher", `Voucher code '${code}' not found or already expired.`);
+    }
+  };
+
+  const handleRecordPettyCash = (e: React.FormEvent) => {
+    e.preventDefault();
+    const newEntry = {
+      id: `pc_${Date.now()}`,
+      voucher_no: `PETTY-${Math.floor(1000 + Math.random() * 9000)}`,
+      category: pettyCashCategory,
+      amount: Number(pettyCashAmount),
+      date: new Date().toLocaleString([], { hour12: false }),
+      paid_to: pettyCashPaidTo,
+      approved_by: pettyCashApprovedBy,
+    };
+    setPettyCashList([newEntry, ...pettyCashList]);
+    addToast("info", "Petty Cash Recorded", `Voucher ${newEntry.voucher_no} for ₹${pettyCashAmount} disbursed from cash drawer.`);
+    setIsPettyCashOpen(false);
+  };
+
+  const handleCloseShiftAudit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const counted = Number(closingCashInput);
+    const expected = openingFloat + (paymentMode === "cash" ? finalTotal : 0) - totalPettyCash;
+    const variance = counted - expected;
+    
+    setShiftReport({
+      sessionCode: "SES-260327-01",
+      openingFloat,
+      pettyExpenses: totalPettyCash,
+      expectedCash: expected,
+      countedCash: counted,
+      variance,
+      status: variance === 0 ? "Balanced" : variance > 0 ? "Overage" : "Shortage",
+      closedAt: new Date().toLocaleTimeString(),
+    });
+  };
+
 
   const addItemToBill = (
     item: { id: string; name: string; price: number; type: "service" | "product"; duration?: number; audience?: string },
@@ -188,25 +281,53 @@ export function OwnerPOSView() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
-      {/* Header */}
+      {/* Header Banner with Register Drawer Float & Petty Cash Stats */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
-              Point of Sale & Billing Terminal
+              Point of Sale & Register Terminal
+            </span>
+            <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+              Session #SES-260327-01 &bull; Open
             </span>
           </div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
             Salon POS & Billings
           </h1>
           <p className="text-xs text-slate-500">
-            Quick itemized billing, multi-payment split, GST calculation, and instant thermal receipt printing.
+            Quick itemized billing, voucher redemption, petty cash drawer, and shift reconciliation.
           </p>
         </div>
 
-        <div className="text-right">
-          <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Terminal Register</span>
-          <span className="font-mono font-bold text-sm text-slate-800">POS-01 (ACTIVE)</span>
+        {/* Register Actions & Cash Drawer Snapshot */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="bg-slate-50 border border-slate-200 px-3.5 py-2 rounded-2xl flex items-center gap-4 text-xs font-mono">
+            <div>
+              <span className="text-[10px] text-slate-400 block uppercase">Float:</span>
+              <span className="font-bold text-slate-800">₹{openingFloat.toLocaleString()}</span>
+            </div>
+            <div className="border-l border-slate-200 pl-3">
+              <span className="text-[10px] text-slate-400 block uppercase">Petty Out:</span>
+              <span className="font-bold text-rose-600">-₹{totalPettyCash.toLocaleString()}</span>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setIsPettyCashOpen(true)}
+            className="px-3.5 py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-900 font-semibold text-xs flex items-center gap-1.5 cursor-pointer shadow-2xs transition-all hover:scale-[1.01]"
+          >
+            <DollarSign className="w-3.5 h-3.5 text-amber-700" />
+            <span>Petty Cash</span>
+          </button>
+
+          <button
+            onClick={() => setIsCloseShiftOpen(true)}
+            className="px-3.5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs transition-all hover:scale-[1.01]"
+          >
+            <Receipt className="w-3.5 h-3.5 text-slate-300" />
+            <span>Close Shift</span>
+          </button>
         </div>
       </div>
 
@@ -552,82 +673,65 @@ export function OwnerPOSView() {
               )}
             </div>
 
+            {/* Gift Voucher Redemption Field (Invoay / Vagaro) */}
+            <div className="pt-2 border-t border-slate-100">
+              <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+                Redeem Gift Voucher / Prepaid Pass
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={voucherCodeInput}
+                  onChange={(e) => setVoucherCodeInput(e.target.value)}
+                  placeholder="e.g. GLOW-8842, GV-100"
+                  className="flex-1 px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 font-mono uppercase text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                />
+                <button
+                  type="button"
+                  onClick={handleApplyVoucher}
+                  className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs cursor-pointer"
+                >
+                  Apply
+                </button>
+              </div>
+              {appliedVoucherCode && (
+                <div className="flex items-center justify-between text-[11px] text-emerald-700 bg-emerald-50 p-2 rounded-xl border border-emerald-200 mt-2 font-medium">
+                  <span>Pass Applied: {appliedVoucherCode}</span>
+                  <span className="font-mono font-bold">-₹{appliedVoucherAmount.toLocaleString()}</span>
+                </div>
+              )}
+            </div>
+
             {/* Discount & Taxes Math */}
-            <div className="space-y-2 pt-3 border-t border-slate-100 text-xs text-slate-600">
+            <div className="space-y-2 pt-2 border-t border-slate-100 text-xs text-slate-600">
               <div className="flex justify-between">
                 <span>Subtotal:</span>
                 <span className="font-mono text-slate-900">₹{subtotal.toLocaleString()}</span>
               </div>
 
-              {/* Discount Section */}
-              {gstSettings.isDiscountEnabled ? (
-                <div className="flex items-center justify-between">
-                  <span className="text-emerald-700 font-semibold">Special / VIP Discount (%):</span>
-                  <div className="flex items-center gap-1 flex-wrap justify-end">
-                    {(gstSettings.defaultDiscountPresets || [0, 5, 10, 15, 20]).map((pct) => (
-                      <button
-                        key={pct}
-                        onClick={() => setDiscountPercent(pct)}
-                        className={`px-2 py-0.5 rounded text-[11px] font-semibold cursor-pointer transition-all ${
-                          discountPercent === pct
-                            ? "bg-emerald-600 text-white shadow-2xs"
-                            : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                        }`}
-                      >
-                        {pct}%
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="flex justify-between text-slate-400 text-[11px]">
-                  <span>Discount:</span>
-                  <span>Disabled in Settings</span>
-                </div>
-              )}
-
               {discountAmount > 0 && gstSettings.isDiscountEnabled && (
                 <div className="flex justify-between text-emerald-700">
-                  <span>Discount ({effectiveDiscountPercent}%):</span>
+                  <span>VIP Discount ({effectiveDiscountPercent}%):</span>
                   <span className="font-mono">-₹{discountAmount.toLocaleString()}</span>
                 </div>
               )}
 
-              {/* Tax / GST Section */}
-              {gstSettings.isGstEnabled && taxAmount > 0 ? (
-                <div className="space-y-1 pt-1">
-                  {isCgstActive && cgstAmount > 0 && (
-                    <div className="flex justify-between text-slate-500 text-[11px]">
-                      <span>CGST ({gstSettings.cgstRatePct}%):</span>
-                      <span className="font-mono text-slate-700">₹{cgstAmount.toLocaleString()}</span>
-                    </div>
-                  )}
-                  {isSgstActive && sgstAmount > 0 && (
-                    <div className="flex justify-between text-slate-500 text-[11px]">
-                      <span>SGST ({gstSettings.sgstRatePct}%):</span>
-                      <span className="font-mono text-slate-700">₹{sgstAmount.toLocaleString()}</span>
-                    </div>
-                  )}
-                  {isIgstActive && igstAmount > 0 && (
-                    <div className="flex justify-between text-slate-500 text-[11px]">
-                      <span>IGST ({gstSettings.igstRatePct}%):</span>
-                      <span className="font-mono text-slate-700">₹{igstAmount.toLocaleString()}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between text-slate-700 font-medium">
-                    <span>Total Tax:</span>
-                    <span className="font-mono text-slate-900 font-bold">₹{taxAmount.toLocaleString()}</span>
-                  </div>
+              {appliedVoucherAmount > 0 && (
+                <div className="flex justify-between text-emerald-700">
+                  <span>Voucher Credit:</span>
+                  <span className="font-mono">-₹{appliedVoucherAmount.toLocaleString()}</span>
                 </div>
-              ) : (
-                <div className="flex justify-between text-amber-700 font-semibold bg-amber-50 px-2 py-0.5 rounded text-[11px]">
-                  <span>GST Tax:</span>
-                  <span>₹0 ({!gstSettings.isGstEnabled ? "Tax Disabled" : "All Slabs Off"})</span>
+              )}
+
+              {gstSettings.isGstEnabled && taxAmount > 0 && (
+                <div className="flex justify-between text-slate-500 text-[11px]">
+                  <span>GST Taxes:</span>
+                  <span className="font-mono text-slate-700">₹{taxAmount.toLocaleString()}</span>
                 </div>
               )}
 
               <div className="pt-2 border-t border-slate-200 flex justify-between text-base font-bold text-slate-900">
-                <span>Grand Total:</span>
+                <span>Total Payable:</span>
                 <span className="text-emerald-700 text-lg font-mono">₹{finalTotal.toLocaleString()}</span>
               </div>
             </div>
@@ -637,8 +741,8 @@ export function OwnerPOSView() {
               <label className="text-xs font-semibold text-slate-700 block mb-2">Tender Payment Mode</label>
               <div className="grid grid-cols-4 gap-2 text-xs">
                 {[
-                  { id: "card", label: "Card Swipe" },
-                  { id: "upi", label: "UPI / QR" },
+                  { id: "card", label: "Card" },
+                  { id: "upi", label: "UPI QR" },
                   { id: "cash", label: "Cash" },
                   { id: "wallet", label: "Wallet" },
                 ].map((mode) => (
@@ -647,7 +751,7 @@ export function OwnerPOSView() {
                     onClick={() => setPaymentMode(mode.id as any)}
                     className={`py-2 rounded-xl font-semibold capitalize transition-all cursor-pointer ${
                       paymentMode === mode.id
-                        ? "bg-sky-500 text-white shadow-xs"
+                        ? "bg-emerald-600 text-white shadow-xs"
                         : "bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200"
                     }`}
                   >
@@ -668,6 +772,179 @@ export function OwnerPOSView() {
           </div>
         </div>
       </div>
+
+      {/* Petty Cash Expense Modal */}
+      {isPettyCashOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-5 animate-in zoom-in-95 duration-150 border border-slate-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center">
+                  <DollarSign className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg text-slate-900">Petty Cash Payout Voucher</h3>
+                  <p className="text-[11px] text-slate-400">Record cash drawer payouts for salon expenses</p>
+                </div>
+              </div>
+            </div>
+
+            <form onSubmit={handleRecordPettyCash} className="space-y-4 text-xs">
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Expense Category *</label>
+                <select
+                  value={pettyCashCategory}
+                  onChange={(e) => setPettyCashCategory(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+                >
+                  <option value="Tea & Refreshments">Tea & Client Refreshments</option>
+                  <option value="Salon Cleaning & Laundry">Salon Cleaning & Towel Laundry</option>
+                  <option value="Local Courier & Transport">Local Courier & Transport</option>
+                  <option value="Staff Welfare & Snacks">Staff Welfare & Snacks</option>
+                  <option value="Emergency Supplies & Repairs">Emergency Supplies & Repairs</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Amount to Disburse (₹) *</label>
+                <input
+                  type="number"
+                  required
+                  value={pettyCashAmount}
+                  onChange={(e) => setPettyCashAmount(Number(e.target.value))}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Paid To *</label>
+                <input
+                  type="text"
+                  required
+                  value={pettyCashPaidTo}
+                  onChange={(e) => setPettyCashPaidTo(e.target.value)}
+                  placeholder="e.g. Chai Express / Drycleaner"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsPettyCashOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-semibold hover:bg-slate-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold cursor-pointer shadow-sm"
+                >
+                  Disburse Cash
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Close Shift / Day-End Audit Modal */}
+      {isCloseShiftOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-5 animate-in zoom-in-95 duration-150 border border-slate-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center">
+                  <Receipt className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg text-slate-900">Close Register & Z-Report</h3>
+                  <p className="text-[11px] text-slate-400">Perform shift cash drawer reconciliation</p>
+                </div>
+              </div>
+            </div>
+
+            {!shiftReport ? (
+              <form onSubmit={handleCloseShiftAudit} className="space-y-4 text-xs">
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/70 space-y-2">
+                  <div className="flex justify-between text-slate-600">
+                    <span>Opening Cash Float:</span>
+                    <span className="font-mono font-bold text-slate-900">₹{openingFloat.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-600">
+                    <span>Petty Cash Deductions:</span>
+                    <span className="font-mono font-bold text-rose-600">-₹{totalPettyCash.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-900 font-semibold border-t border-slate-200 pt-2">
+                    <span>Expected Cash in Drawer:</span>
+                    <span className="font-mono font-bold text-emerald-700">
+                      ₹{(openingFloat - totalPettyCash).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="font-semibold text-slate-700 block mb-1">Counted Physical Cash in Drawer (₹) *</label>
+                  <input
+                    type="number"
+                    required
+                    value={closingCashInput}
+                    onChange={(e) => setClosingCashInput(e.target.value)}
+                    placeholder="Enter physical cash total..."
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-500/30 text-sm"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setIsCloseShiftOpen(false)}
+                    className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-semibold hover:bg-slate-50 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold cursor-pointer shadow-sm"
+                  >
+                    Generate Z-Report
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="space-y-4 text-xs">
+                <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-200 space-y-2">
+                  <div className="flex justify-between text-slate-700">
+                    <span>Status:</span>
+                    <span className="font-bold uppercase text-emerald-800">{shiftReport.status}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-700">
+                    <span>Counted Cash:</span>
+                    <span className="font-mono font-bold">₹{shiftReport.countedCash.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-700">
+                    <span>Variance:</span>
+                    <span className={`font-mono font-bold ${shiftReport.variance === 0 ? "text-emerald-700" : "text-amber-700"}`}>
+                      ₹{shiftReport.variance.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    addToast("success", "Shift Closed", "Z-Report printed and session locked.");
+                    setIsCloseShiftOpen(false);
+                    setShiftReport(null);
+                  }}
+                  className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs cursor-pointer"
+                >
+                  Print Z-Report & Done
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -79,3 +79,30 @@ class TaxSummaryResponse(BaseModel):
     sgst: float
     igst: float
     taxable_turnover: float
+
+class PettyCashExpenseCreate(BaseModel):
+    branch_id: str
+    session_code: Optional[str] = None
+    category: str # Tea / Refreshments, Salon Cleaning & Laundry, Local Transport, Staff Welfare, Emergency Repairs, Miscellaneous
+    amount: float
+    date: Optional[str] = None
+    paid_to: str
+    approved_by: str
+    payment_mode: str = "cash_drawer"
+    receipt_url: Optional[str] = None
+    notes: Optional[str] = None
+
+class PettyCashExpenseResponse(PettyCashExpenseCreate):
+    id: str
+    voucher_no: str
+    created_at: Any = None
+
+    class Config:
+        from_attributes = True
+
+class POSRegisterCloseRequest(BaseModel):
+    session_code: str
+    closing_cash: float
+    closed_by: str
+    notes: Optional[str] = None
+

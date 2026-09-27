@@ -695,4 +695,71 @@ export interface GSTDiscountSettings {
   };
 }
 
+export interface FormulaCard {
+  id: string;
+  customer_id: string;
+  customer_name: string;
+  stylist_id?: string;
+  stylist_name?: string;
+  branch_id?: string;
+  service_type: string;
+  date: string;
+  formula_details: Record<string, any>;
+  processing_time_mins: number;
+  patch_test_date?: string;
+  patch_test_result?: "Passed" | "Pending" | "Sensitive" | "N/A" | string;
+  before_image?: string;
+  after_image?: string;
+  technique_notes?: string;
+  client_feedback?: string;
+  is_active?: boolean;
+  created_at?: string;
+}
+
+export interface GiftVoucher {
+  id: string;
+  code: string;
+  title: string;
+  initial_amount: number;
+  remaining_balance: number;
+  customer_id?: string;
+  recipient_name?: string;
+  recipient_phone?: string;
+  recipient_email?: string;
+  expiry_date: string;
+  branch_id?: string;
+  status: "active" | "redeemed" | "expired" | "cancelled" | string;
+  notes?: string;
+  created_at?: string;
+}
+
+export interface PettyCashExpense {
+  id: string;
+  voucher_no: string;
+  branch_id: string;
+  session_code?: string;
+  category: string;
+  amount: number;
+  date: string;
+  paid_to: string;
+  approved_by: string;
+  payment_mode: "cash_drawer" | "petty_cash_box" | "upi" | string;
+  receipt_url?: string;
+  notes?: string;
+  created_at?: string;
+}
+
+export interface SalonStation {
+  id: string;
+  branch_id: string;
+  station_code: string;
+  name: string;
+  station_type: "styling_chair" | "spa_bed" | "wash_basin" | "bridal_suite" | "nail_bar" | string;
+  status: "available" | "occupied" | "maintenance" | "cleaning" | string;
+  current_appointment_id?: string;
+  assigned_stylist_name?: string;
+  is_active?: boolean;
+}
+
+
 

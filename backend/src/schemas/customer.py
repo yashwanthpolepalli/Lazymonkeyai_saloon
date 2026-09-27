@@ -120,3 +120,60 @@ class MembershipTierResponse(MembershipTierBase):
 
     class Config:
         from_attributes = True
+
+class FormulaCardCreate(BaseModel):
+    customer_id: str
+    customer_name: str
+    stylist_id: Optional[str] = None
+    stylist_name: Optional[str] = None
+    branch_id: Optional[str] = None
+    service_type: str
+    date: str
+    formula_details: Dict[str, Any] = {}
+    processing_time_mins: int = 30
+    patch_test_date: Optional[str] = None
+    patch_test_result: str = "Passed"
+    before_image: Optional[str] = None
+    after_image: Optional[str] = None
+    technique_notes: Optional[str] = None
+    client_feedback: Optional[str] = None
+
+class FormulaCardResponse(FormulaCardCreate):
+    id: str
+    created_at: Any = None
+
+    class Config:
+        from_attributes = True
+
+class GiftVoucherCreate(BaseModel):
+    code: Optional[str] = None
+    title: str
+    initial_amount: float
+    customer_id: Optional[str] = None
+    recipient_name: Optional[str] = None
+    recipient_phone: Optional[str] = None
+    recipient_email: Optional[str] = None
+    expiry_date: str
+    branch_id: Optional[str] = None
+    notes: Optional[str] = None
+
+class GiftVoucherRedeem(BaseModel):
+    code: str
+    amount_to_redeem: float
+
+class GiftVoucherResponse(BaseModel):
+    id: str
+    code: str
+    title: str
+    initial_amount: float
+    remaining_balance: float
+    recipient_name: Optional[str] = None
+    recipient_phone: Optional[str] = None
+    recipient_email: Optional[str] = None
+    expiry_date: str
+    status: str
+    notes: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+

@@ -13,6 +13,7 @@ from src.api.v1.copilot import router as copilot_router
 from src.api.v1.notifications import router as notifications_router
 from src.api.v1.system_settings import router as settings_router
 from src.api.v1.organizations import router as organizations_router
+from src.api.v1.stations import router as stations_router
 
 # CRM Sub-Routers
 from src.api.v1.crm_modules.customers import router as crm_customers_router, wallet_router as crm_wallet_router
@@ -22,12 +23,15 @@ from src.api.v1.crm_modules.segments import router as crm_segments_router
 from src.api.v1.crm_modules.whatsapp_automation import router as crm_whatsapp_router
 from src.api.v1.crm_modules.leads import router as crm_leads_router
 from src.api.v1.crm_modules.tickets import router as crm_tickets_router
+from src.api.v1.crm_modules.formula_cards import router as crm_formula_cards_router
+from src.api.v1.crm_modules.gift_vouchers import router as crm_gift_vouchers_router
 
 # POS Sub-Routers
 from src.api.v1.pos.transactions import router as pos_transactions_router
 from src.api.v1.pos.products import router as pos_products_router
 from src.api.v1.pos.sessions import router as pos_sessions_router
 from src.api.v1.pos.free_qty_rules import router as pos_free_qty_router
+from src.api.v1.pos.petty_cash import router as pos_petty_cash_router
 
 # HRMS Sub-Routers
 from src.api.v1.hrms.employees import router as hrms_employees_router
@@ -62,6 +66,7 @@ api_v1_router.include_router(copilot_router)
 api_v1_router.include_router(notifications_router)
 api_v1_router.include_router(settings_router)
 api_v1_router.include_router(organizations_router)
+api_v1_router.include_router(stations_router)
 
 # Include CRM Routers
 api_v1_router.include_router(crm_customers_router)
@@ -72,12 +77,15 @@ api_v1_router.include_router(crm_segments_router)
 api_v1_router.include_router(crm_whatsapp_router)
 api_v1_router.include_router(crm_leads_router)
 api_v1_router.include_router(crm_tickets_router)
+api_v1_router.include_router(crm_formula_cards_router)
+api_v1_router.include_router(crm_gift_vouchers_router)
 
 # Include POS Routers
 api_v1_router.include_router(pos_transactions_router)
 api_v1_router.include_router(pos_products_router)
 api_v1_router.include_router(pos_sessions_router)
 api_v1_router.include_router(pos_free_qty_router)
+api_v1_router.include_router(pos_petty_cash_router)
 
 # Include HRMS Routers
 api_v1_router.include_router(hrms_employees_router)
@@ -96,3 +104,4 @@ api_v1_router.include_router(erp_accounting_router)
 api_v1_router.include_router(erp_gst_router)
 api_v1_router.include_router(erp_vouchers_router)
 api_v1_router.include_router(erp_fixed_assets_router)
+

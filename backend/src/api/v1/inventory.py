@@ -82,9 +82,47 @@ def adjust_stock(req: StockAdjustmentRequest, db: Session = Depends(get_db)):
         "success": True
     }
 
+@router.post("/record-consumption")
+def record_service_consumption(req: RecordConsumptionRequest, db: Session = Depends(get_db)):
+    results = []
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    
+    for item in req.items:
+        prod = db.query(InventoryProduct).filter(InventoryProduct.id == item.product_id).first()
+        if not prod:
+            continue
+        
+        # Deduct quantity from current_stock
+        prod.current_stock = max(0, int((prod.current_stock or 0) - item.quantity))
+        
+        # Log stock movement
+        movement = StockMovement(
+            product_id=prod.id,
+            product_name=prod.name,
+            type="consumption",
+            branch_id=req.branch_id,
+            quantity=item.quantity,
+            unit=item.unit or prod.unit,
+            reference=f"SERVICE-{req.service_name or 'EXECUTION'}",
+            date=date_str,
+            performed_by=req.performed_by or "Stylist",
+            reason=f"Consumed in service {req.service_name or ''} for {req.customer_name or 'Client'}. {req.notes or ''}"
+        )
+        db.add(movement)
+        results.append({
+            "productId": prod.id,
+            "productName": prod.name,
+            "consumedQty": item.quantity,
+            "remainingStock": prod.current_stock
+        })
+    
+    db.commit()
+    return {"success": True, "consumedItems": results}
+
 @router.get("/movements", response_model=List[StockMovementResponse])
 def get_stock_movements(product_id: Optional[str] = None, db: Session = Depends(get_db)):
     query = db.query(StockMovement)
     if product_id:
         query = query.filter(StockMovement.product_id == product_id)
     return query.order_by(StockMovement.created_at.desc()).limit(100).all()
+

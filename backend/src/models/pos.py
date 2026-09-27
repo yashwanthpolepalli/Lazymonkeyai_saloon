@@ -29,3 +29,19 @@ class FreeQuantityRule(TimeStampedModel):
     discount_pct = Column(Float, default=100.0) # 100% free
     is_active = Column(Boolean, default=True)
     valid_until = Column(String(50), nullable=True)
+
+class PettyCashExpense(TimeStampedModel):
+    __tablename__ = "petty_cash_expenses"
+
+    voucher_no = Column(String(100), unique=True, index=True, nullable=False)
+    branch_id = Column(String(36), ForeignKey("branches.id", ondelete="CASCADE"), nullable=False)
+    session_code = Column(String(50), nullable=True)
+    category = Column(String(100), nullable=False) # Tea / Refreshments, Salon Cleaning & Laundry, Local Transport, Staff Welfare, Emergency Repairs, Miscellaneous
+    amount = Column(Float, nullable=False)
+    date = Column(String(50), nullable=False)
+    paid_to = Column(String(255), nullable=False)
+    approved_by = Column(String(255), nullable=False)
+    payment_mode = Column(String(50), default="cash_drawer") # cash_drawer, petty_cash_box, upi
+    receipt_url = Column(String(500), nullable=True)
+    notes = Column(Text, nullable=True)
+

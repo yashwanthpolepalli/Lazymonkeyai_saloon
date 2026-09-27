@@ -66,3 +66,19 @@ class StockMovementResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class ConsumptionItem(BaseModel):
+    product_id: str
+    quantity: float
+    unit: Optional[str] = "units"
+
+class RecordConsumptionRequest(BaseModel):
+    branch_id: str
+    service_id: Optional[str] = None
+    service_name: Optional[str] = None
+    appointment_id: Optional[str] = None
+    customer_name: Optional[str] = None
+    performed_by: Optional[str] = "Stylist"
+    items: list[ConsumptionItem]
+    notes: Optional[str] = None
+

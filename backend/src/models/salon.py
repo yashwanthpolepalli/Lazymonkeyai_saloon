@@ -114,3 +114,16 @@ class TimeSlotConfig(TimeStampedModel):
     allowed_genders = Column(JSON, default=lambda: ["women", "men", "unisex"])
     allowed_categories = Column(JSON, default=list)
     slot_type = Column(String(50), default="regular") # regular, women_exclusive, men_grooming, bridal_suite, etc.
+
+class SalonStation(TimeStampedModel):
+    __tablename__ = "salon_stations"
+
+    branch_id = Column(String(36), ForeignKey("branches.id", ondelete="CASCADE"), nullable=False)
+    station_code = Column(String(50), index=True, nullable=False) # e.g. CHAIR-01, SPA-01, BRIDAL-01
+    name = Column(String(255), nullable=False) # e.g. "Master Styling Chair 1", "Ayurvedic Treatment Suite"
+    station_type = Column(String(50), default="styling_chair") # styling_chair, spa_bed, wash_basin, bridal_suite, nail_bar
+    status = Column(String(50), default="available") # available, occupied, maintenance, cleaning
+    current_appointment_id = Column(String(36), nullable=True)
+    assigned_stylist_name = Column(String(255), nullable=True)
+    is_active = Column(Boolean, default=True)
+

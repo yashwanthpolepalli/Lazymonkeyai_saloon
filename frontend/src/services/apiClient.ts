@@ -413,3 +413,123 @@ export const AllocationService = {
       method: "POST",
     }),
 };
+
+// 15. Formula Card & Styling History Service (Boulevard / Invoay)
+export const FormulaCardService = {
+  getFormulaCards: (customerId?: string, serviceType?: string, branchId?: string) => {
+    const params = new URLSearchParams();
+    if (customerId) params.append("customer_id", customerId);
+    if (serviceType) params.append("service_type", serviceType);
+    if (branchId) params.append("branch_id", branchId);
+    const qs = params.toString();
+    return request<any[]>(`/crm/formula-cards${qs ? `?${qs}` : ""}`);
+  },
+  createFormulaCard: (formulaData: any) =>
+    request<any>("/crm/formula-cards", {
+      method: "POST",
+      body: JSON.stringify(formulaData),
+    }),
+  deleteFormulaCard: (formulaId: string) =>
+    request<any>(`/crm/formula-cards/${formulaId}`, {
+      method: "DELETE",
+    }),
+};
+
+// 16. Gift Voucher & Prepaid Packages Service (Invoay / Vagaro)
+export const GiftVoucherService = {
+  getGiftVouchers: (statusFilter?: string, customerId?: string) => {
+    const params = new URLSearchParams();
+    if (statusFilter) params.append("status_filter", statusFilter);
+    if (customerId) params.append("customer_id", customerId);
+    const qs = params.toString();
+    return request<any[]>(`/crm/gift-vouchers${qs ? `?${qs}` : ""}`);
+  },
+  issueGiftVoucher: (voucherData: any) =>
+    request<any>("/crm/gift-vouchers", {
+      method: "POST",
+      body: JSON.stringify(voucherData),
+    }),
+  validateVoucher: (code: string) =>
+    request<any>(`/crm/gift-vouchers/validate/${encodeURIComponent(code)}`),
+  redeemVoucher: (redemptionData: { code: string; amount_to_redeem: number }) =>
+    request<any>("/crm/gift-vouchers/redeem", {
+      method: "POST",
+      body: JSON.stringify(redemptionData),
+    }),
+};
+
+// 17. Petty Cash & Cash Register Drawer Service (Invoay / Square POS)
+export const PettyCashService = {
+  getPettyCashExpenses: (branchId?: string, sessionCode?: string, category?: string) => {
+    const params = new URLSearchParams();
+    if (branchId) params.append("branch_id", branchId);
+    if (sessionCode) params.append("session_code", sessionCode);
+    if (category) params.append("category", category);
+    const qs = params.toString();
+    return request<any[]>(`/pos/petty-cash${qs ? `?${qs}` : ""}`);
+  },
+  recordExpense: (expenseData: any) =>
+    request<any>("/pos/petty-cash", {
+      method: "POST",
+      body: JSON.stringify(expenseData),
+    }),
+  getActiveSession: (branchId: string) =>
+    request<any>(`/pos/sessions/active/${branchId}`),
+  openSession: (sessionData: { branch_id: string; opened_by: string; opening_cash: number }) =>
+    request<any>("/pos/sessions/open", {
+      method: "POST",
+      body: JSON.stringify(sessionData),
+    }),
+  closeSession: (sessionId: string, closeData: { closed_by: string; closing_cash: number; notes?: string }) =>
+    request<any>(`/pos/sessions/${sessionId}/close`, {
+      method: "POST",
+      body: JSON.stringify(closeData),
+    }),
+};
+
+// 18. Salon Stations & Room Allocation Service (Zenoti / Boulevard)
+export const StationService = {
+  getStations: (branchId?: string, stationType?: string, statusFilter?: string) => {
+    const params = new URLSearchParams();
+    if (branchId) params.append("branch_id", branchId);
+    if (stationType) params.append("station_type", stationType);
+    if (statusFilter) params.append("status_filter", statusFilter);
+    const qs = params.toString();
+    return request<any[]>(`/stations${qs ? `?${qs}` : ""}`);
+  },
+  createStation: (stationData: any) =>
+    request<any>("/stations", {
+      method: "POST",
+      body: JSON.stringify(stationData),
+    }),
+  updateStatus: (stationId: string, statusData: { status: string; current_appointment_id?: string; assigned_stylist_name?: string }) =>
+    request<any>(`/stations/${stationId}/status`, {
+      method: "PATCH",
+      body: JSON.stringify(statusData),
+    }),
+};
+
+// 19. Back-Bar Internal Consumption Service (Invoay / Zenoti)
+export const BackBarService = {
+  recordConsumption: (consumptionData: {
+    branch_id: string;
+    service_id?: string;
+    service_name?: string;
+    appointment_id?: string;
+    customer_name?: string;
+    performed_by?: string;
+    items: Array<{ product_id: string; quantity: number; unit?: string }>;
+    notes?: string;
+  }) =>
+    request<any>("/inventory/record-consumption", {
+      method: "POST",
+      body: JSON.stringify(consumptionData),
+    }),
+  getMovements: (productId?: string) => {
+    const params = new URLSearchParams();
+    if (productId) params.append("product_id", productId);
+    const qs = params.toString();
+    return request<any[]>(`/inventory/movements${qs ? `?${qs}` : ""}`);
+  },
+};
+

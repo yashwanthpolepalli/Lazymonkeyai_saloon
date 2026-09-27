@@ -65,3 +65,43 @@ class MembershipTier(TimeStampedModel):
     free_monthly_blowouts = Column(Integer, default=0)
     priority_booking = Column(Boolean, default=True)
     is_active = Column(Boolean, default=True)
+
+class FormulaCard(TimeStampedModel):
+    __tablename__ = "formula_cards"
+
+    customer_id = Column(String(36), ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True)
+    customer_name = Column(String(255), nullable=False)
+    stylist_id = Column(String(36), ForeignKey("stylists.id", ondelete="SET NULL"), nullable=True)
+    stylist_name = Column(String(255), nullable=True)
+    branch_id = Column(String(36), ForeignKey("branches.id", ondelete="SET NULL"), nullable=True)
+    service_type = Column(String(100), nullable=False) # Hair Color, Balayage, Keratin, Facial Peel, Scalp Therapy
+    date = Column(String(50), nullable=False)
+    formula_details = Column(JSON, default=dict) # {"roots": "...", "mid_lengths": "...", "developer": "...", "processing_time": "..."}
+    processing_time_mins = Column(Integer, default=30)
+    patch_test_date = Column(String(50), nullable=True)
+    patch_test_result = Column(String(50), default="Passed") # Passed, Pending, Sensitive, N/A
+    before_image = Column(String(500), nullable=True)
+    after_image = Column(String(500), nullable=True)
+    technique_notes = Column(Text, nullable=True)
+    client_feedback = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
+
+    customer = relationship("Customer", backref="formula_records")
+
+class GiftVoucher(TimeStampedModel):
+    __tablename__ = "gift_vouchers"
+
+    code = Column(String(100), unique=True, index=True, nullable=False)
+    title = Column(String(255), nullable=False)
+    initial_amount = Column(Float, nullable=False)
+    remaining_balance = Column(Float, nullable=False)
+    customer_id = Column(String(36), ForeignKey("customers.id", ondelete="SET NULL"), nullable=True)
+    recipient_name = Column(String(255), nullable=True)
+    recipient_phone = Column(String(50), nullable=True)
+    recipient_email = Column(String(255), nullable=True)
+    expiry_date = Column(String(50), nullable=False)
+    branch_id = Column(String(36), ForeignKey("branches.id", ondelete="SET NULL"), nullable=True)
+    status = Column(String(50), default="active") # active, redeemed, expired, cancelled
+    notes = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
+
