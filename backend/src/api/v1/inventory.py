@@ -6,7 +6,7 @@ from src.core.database import get_db
 from src.models.inventory import InventoryProduct, StockMovement
 from src.schemas.inventory import (
     InventoryProductCreate, InventoryProductUpdate, InventoryProductResponse,
-    StockAdjustmentRequest, StockMovementResponse
+    StockAdjustmentRequest, StockMovementResponse, RecordConsumptionRequest
 )
 
 router = APIRouter(prefix="/inventory", tags=["Inventory & Stock"])
