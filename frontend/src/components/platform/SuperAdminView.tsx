@@ -158,7 +158,7 @@ export interface IntegrationGateway {
 // MAIN SUPER ADMIN VIEW COMPONENT
 // ==========================================
 export function SuperAdminView() {
-  const { activeSubTab, setActiveSubTab, addToast } = useSalon();
+  const { activeSubTab, setActiveSubTab, addToast, currentUser, organizations } = useSalon();
 
   // Search, Filter & Drill-down state
   const [searchQuery, setSearchQuery] = useState("");
@@ -188,117 +188,40 @@ export function SuperAdminView() {
 
   // Admin Profile State
   const [adminProfile, setAdminProfile] = useState({
-    name: "Alexander Vance",
+    name: currentUser?.name || "Platform Super Admin",
     role: "Super Admin Root",
-    email: "admin.root@lazymonkeyai.luxury",
+    email: currentUser?.email || "admin.root@salon.system",
     phone: "+91 98200 99999",
     twoFactorEnabled: true,
     ipRestrictionsEnabled: true,
   });
 
-  // 1. TENANT ORGANIZATIONS (MOCK DATA)
-  const [tenants, setTenants] = useState<TenantOwner[]>([
-    {
-      id: "org_01",
-      name: "Priya Reddy",
-      brandName: "Glam Studio Luxury Chain",
-      email: "priya.reddy@glamstudio.luxury",
-      phone: "+91 98200 44122",
-      plan: "Business",
-      status: "Active",
-      branchesCount: 4,
-      staffCount: 38,
-      customersCount: 3840,
-      bookingsCount: 1842,
-      mrr: 29999,
-      joinedDate: "14 Jan 2025",
-      renewalDate: "14 Oct 2026",
-      city: "Hyderabad",
-      country: "India",
-      aiCreditsUsed: 18240,
-      aiCreditsLimit: 50000,
-    },
-    {
-      id: "org_02",
-      name: "Alexander Vance",
-      brandName: "LazyMonkey AI Flagship Group",
-      email: "alexander.vance@lazymonkeyai.luxury",
-      phone: "+91 98200 12345",
-      plan: "Enterprise",
-      status: "Active",
-      branchesCount: 8,
-      staffCount: 94,
-      customersCount: 14200,
-      bookingsCount: 8940,
-      mrr: 79999,
-      joinedDate: "02 Nov 2024",
-      renewalDate: "02 Nov 2026",
-      city: "Mumbai",
-      country: "India",
-      aiCreditsUsed: 64200,
-      aiCreditsLimit: 200000,
-    },
-    {
-      id: "org_03",
-      name: "Camille Dupont",
-      brandName: "Maison De Beauté Paris",
-      email: "camille@maisonbeaute.fr",
-      phone: "+33 1 42 68 55 00",
-      plan: "Enterprise",
-      status: "Active",
-      branchesCount: 3,
-      staffCount: 42,
-      customersCount: 5120,
-      bookingsCount: 3200,
-      mrr: 79999,
-      joinedDate: "10 Mar 2025",
-      renewalDate: "10 Dec 2026",
-      city: "London Mayfair",
-      country: "United Kingdom",
-      aiCreditsUsed: 31200,
-      aiCreditsLimit: 200000,
-    },
-    {
-      id: "org_04",
-      name: "Zayn Al-Mansoor",
-      brandName: "Royale Couture Lounge Dubai",
-      email: "zayn@royalecouture.ae",
-      phone: "+971 4 399 2200",
-      plan: "Business",
-      status: "Active",
-      branchesCount: 2,
-      staffCount: 24,
-      customersCount: 2840,
-      bookingsCount: 1420,
-      mrr: 29999,
-      joinedDate: "05 Jun 2025",
-      renewalDate: "05 Nov 2026",
-      city: "Dubai Marina",
-      country: "United Arab Emirates",
-      aiCreditsUsed: 22400,
-      aiCreditsLimit: 50000,
-    },
-    {
-      id: "org_05",
-      name: "Rohit Verma",
-      brandName: "Urban Glow Hair & Aesthetics",
-      email: "rohit@urbanglow.in",
-      phone: "+91 98450 11998",
-      plan: "Professional",
-      status: "Active",
-      branchesCount: 2,
-      staffCount: 16,
-      customersCount: 1940,
-      bookingsCount: 880,
-      mrr: 14999,
-      joinedDate: "18 Aug 2025",
-      renewalDate: "18 Oct 2026",
-      city: "Bengaluru",
-      country: "India",
-      aiCreditsUsed: 8900,
-      aiCreditsLimit: 20000,
-    },
-  ]);
+  // 1. TENANT ORGANIZATIONS (DYNAMIC FROM REGISTERED ORGANIZATIONS)
+  const [tenants, setTenants] = useState<TenantOwner[]>(() => {
+    if (organizations && organizations.length > 0) {
+      return organizations.map((org) => ({
+        id: org.id,
+        name: org.name,
+        brandName: org.brand_tagline || org.name,
+        email: org.email || `contact@${org.code.toLowerCase()}.luxury`,
+        phone: org.phone || "+91 98200 00000",
+        plan: "Enterprise" as const,
+        status: "Active" as const,
+        branchesCount: 1,
+        staffCount: 10,
+        customersCount: 500,
+        bookingsCount: 250,
+        mrr: 49999,
+        joinedDate: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
+        renewalDate: "01 Jan 2027",
+        city: org.city || "Mumbai",
+        country: org.country || "India",
+        aiCreditsUsed: 5000,
+        aiCreditsLimit: 100000,
+      }));
+    }
+    return [];
+  });
 
   // 2. MASTER UNIVERSAL SERVICE CATALOG
   const [masterCatalog, setMasterCatalog] = useState<MasterServiceItem[]>([

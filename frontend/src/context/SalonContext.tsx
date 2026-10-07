@@ -33,6 +33,7 @@ import {
   AuditLog,
   ServiceAllocation,
   AuthUser,
+  StylistTier,
 } from "@/types";
 import {
   MOCK_BRANCHES,
@@ -485,18 +486,18 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
 
   // Branches state
   const [branches, setBranches] = useState<Branch[]>(() =>
-    loadFromStorage("salon_branches", MOCK_BRANCHES)
+    loadFromStorage("salon_branches", [])
   );
 
   // Owner Profile state
   const [ownerProfile, setOwnerProfile] = useState<OwnerProfile>(() =>
     loadFromStorage("salon_owner_profile", {
-      name: "Alexander Vance",
-      title: "Salon Managing Director & Founder",
-      email: "alexander.vance@lazymonkeyai.luxury",
-      phone: "+91 98200 12345",
-      avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80",
-      bio: "Visionary owner behind LazyMonkey AI luxury salon chain. Overseeing 8 premier flagship salons globally.",
+      name: "",
+      title: "Salon Managing Director",
+      email: "",
+      phone: "",
+      avatarUrl: "",
+      bio: "",
       role: "Owner / Franchise Operator",
     })
   );
@@ -504,16 +505,16 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
   // MFA & Security state
   const [mfaSettings, setMfaSettings] = useState<MFASettings>(() =>
     loadFromStorage("salon_mfa_settings", {
-      isMFAEnabled: true,
+      isMFAEnabled: false,
       mfaMethod: "authenticator",
-      backupPhone: "+91 98200 12345",
-      backupEmail: "security@lazymonkeyai.luxury",
+      backupPhone: "",
+      backupEmail: "",
       pageProtection: {
-        posPayments: true,
-        payrollStructures: true,
+        posPayments: false,
+        payrollStructures: false,
         inventoryCosting: false,
-        customerExport: true,
-        branchPlatform: true,
+        customerExport: false,
+        branchPlatform: false,
         staffManagement: false,
       },
     })
@@ -522,16 +523,16 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
   // Customization state
   const [customizationSettings, setCustomizationSettings] = useState<SalonCustomization>(() =>
     loadFromStorage("salon_customization_settings", {
-      salonName: "LAZYMONKEY AI LUXURY SALON",
-      tagline: "The Pinnacle of Haute Coiffure & Bespoke Esthetics",
-      logoUrl: "https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=200&q=80",
+      salonName: "Salon Management System",
+      tagline: "",
+      logoUrl: "",
       monogram: "LM",
       brandColor: "#0284c7",
       accentPreset: "sky",
       currencySymbol: "₹",
       taxRatePct: 18,
-      invoiceHeader: "Thank you for visiting LazyMonkey Luxury Atelier",
-      invoiceFooter: "All services include complimentary champagne & organic styling products. Returns valid within 14 days with original receipt.",
+      invoiceHeader: "Thank you for your visit",
+      invoiceFooter: "All services include styling & professional care.",
       slotDuration: 30,
       bufferTime: 10,
       smsBookingConfirm: true,
@@ -553,7 +554,7 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
       cgstRatePct: 9,
       sgstRatePct: 9,
       igstRatePct: 18,
-      gstin: "29AAAAA0000A1Z5",
+      gstin: "",
       hsnSacCode: "999721",
       taxPricingMode: "exclusive",
       defaultDiscountPresets: [0, 5, 10, 15, 20, 25],
@@ -568,48 +569,77 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
     })
   );
 
-  // Entities state
+  // Entities state - 100% Dynamic from PostgreSQL Backend
   const [customers, setCustomers] = useState<Customer[]>(() =>
-    loadFromStorage("salon_customers", MOCK_CUSTOMERS)
+    loadFromStorage("salon_customers", [])
   );
   const [currentCustomer, setCurrentCustomer] = useState<Customer>(() =>
-    loadFromStorage("salon_current_customer", MOCK_CUSTOMERS[0])
+    loadFromStorage("salon_current_customer", {
+      id: "",
+      name: "Guest Client",
+      email: "",
+      phone: "",
+      avatar: "",
+      gender: "female",
+      joinedDate: new Date().toISOString().split("T")[0],
+      preferredBranchId: "",
+      walletBalance: 0,
+      loyaltyPoints: 0,
+      membershipTier: "Standard",
+      packages: [],
+      beautyProfile: {
+        hairType: "",
+        hairTexture: "",
+        scalpCondition: "",
+        skinType: "",
+        skinConcerns: [],
+        allergies: [],
+        preferredBeverage: "",
+        preferredMusic: "",
+        lastConsultationDate: new Date().toISOString().split("T")[0],
+      },
+      totalSpent: 0,
+      visitsCount: 0,
+      segment: "New Customer",
+      tags: [],
+      notes: "",
+    })
   );
   const [services, setServices] = useState<Service[]>(() =>
-    loadFromStorage("salon_services", MOCK_SERVICES)
+    loadFromStorage("salon_services", [])
   );
   const [stylists, setStylists] = useState<Stylist[]>(() =>
-    loadFromStorage("salon_stylists", MOCK_STYLISTS)
+    loadFromStorage("salon_stylists", [])
   );
   const [appointments, setAppointments] = useState<Appointment[]>(() =>
-    loadFromStorage("salon_appointments", MOCK_APPOINTMENTS)
+    loadFromStorage("salon_appointments", [])
   );
   const [inventory, setInventory] = useState<InventoryProduct[]>(() =>
-    loadFromStorage("salon_inventory", MOCK_INVENTORY)
+    loadFromStorage("salon_inventory", [])
   );
   const [employees, setEmployees] = useState<Employee[]>(() =>
-    loadFromStorage("salon_employees", MOCK_EMPLOYEES)
+    loadFromStorage("salon_employees", [])
   );
   const [attendance, setAttendance] = useState<AttendanceRecord[]>(() =>
-    loadFromStorage("salon_attendance", MOCK_ATTENDANCE)
+    loadFromStorage("salon_attendance", [])
   );
   const [leaves, setLeaves] = useState<LeaveRequest[]>(() =>
-    loadFromStorage("salon_leaves", MOCK_LEAVES)
+    loadFromStorage("salon_leaves", [])
   );
   const [leads, setLeads] = useState<Lead[]>(() =>
-    loadFromStorage("salon_leads", MOCK_LEADS)
+    loadFromStorage("salon_leads", [])
   );
   const [campaigns, setCampaigns] = useState<Campaign[]>(() =>
-    loadFromStorage("salon_campaigns", MOCK_CAMPAIGNS)
+    loadFromStorage("salon_campaigns", [])
   );
   const [coupons, setCoupons] = useState<Coupon[]>(() =>
-    loadFromStorage("salon_coupons", MOCK_COUPONS)
+    loadFromStorage("salon_coupons", [])
   );
   const [expenses, setExpenses] = useState<FinancialExpense[]>(() =>
-    loadFromStorage("salon_expenses", MOCK_EXPENSES)
+    loadFromStorage("salon_expenses", [])
   );
   const [tickets, setTickets] = useState<CustomerTicket[]>(() =>
-    loadFromStorage("salon_tickets", MOCK_TICKETS)
+    loadFromStorage("salon_tickets", [])
   );
   const [invoices, setInvoices] = useState<Invoice[]>(() =>
     loadFromStorage("salon_invoices", [])
@@ -1138,29 +1168,55 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
     addToast("info", "Signed Out", "You have successfully logged out.");
   };
 
-  const selectedBranch = useMemo(() => {
-    return branches.find((b) => b.id === selectedBranchId) || branches[0] || MOCK_BRANCHES[0];
-  }, [branches, selectedBranchId]);
+  const selectedBranch = useMemo<Branch>(() => {
+    return (
+      branches.find((b) => b.id === selectedBranchId) ||
+      branches[0] || {
+        id: selectedBranchId || "",
+        name: currentOrganization?.name || "Main Branch",
+        code: currentOrganization?.code || "BR-01",
+        branchType: "Studio",
+        managerName: "",
+        status: "active",
+        phone: currentOrganization?.phone || "",
+        email: currentOrganization?.email || "",
+        whatsapp: currentOrganization?.phone || "",
+        address: currentOrganization?.address || "",
+        city: currentOrganization?.city || "",
+        state: currentOrganization?.state || "",
+        country: currentOrganization?.country || "",
+        pinCode: "",
+        mapLocation: "",
+        currency: currentOrganization?.currency || "INR",
+        taxRate: currentOrganization?.tax_rate || 0.18,
+        rating: 5.0,
+        totalReviews: 0,
+        image: "",
+        logo: currentOrganization?.logo || "",
+        description: currentOrganization?.brand_tagline || "",
+        chairsCount: 0,
+        openingHours: "09:00 AM - 09:00 PM",
+      }
+    );
+  }, [branches, selectedBranchId, currentOrganization]);
 
   const addBranch = (branchData: Partial<Branch>): Branch => {
     const newBranch: Branch = {
       id: generateId("br"),
-      name: branchData.name || "New Flagship Branch",
-      code: branchData.code || `LM-0${branches.length + 1}`,
-      city: branchData.city || "Mumbai",
+      name: branchData.name || "New Branch",
+      code: branchData.code || `BR-0${branches.length + 1}`,
+      city: branchData.city || "",
       country: branchData.country || "India",
       currency: branchData.currency || "INR",
       taxRate: branchData.taxRate ?? 0.18,
-      phone: branchData.phone || "+91 22 4580 9900",
-      email: branchData.email || "branch@lazymonkeyai.luxury",
-      address: branchData.address || "Flagship Avenue, Suite 100",
+      phone: branchData.phone || "",
+      email: branchData.email || "",
+      address: branchData.address || "",
       rating: 5.0,
       totalReviews: 0,
-      image:
-        branchData.image ||
-        "https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=1200&q=80",
-      chairsCount: branchData.chairsCount || 10,
-      openingHours: branchData.openingHours || "09:00 AM - 09:30 PM",
+      image: branchData.image || "",
+      chairsCount: branchData.chairsCount || 0,
+      openingHours: branchData.openingHours || "09:00 AM - 09:00 PM",
       status: "active",
     };
     setBranches((prev) => [...prev, newBranch]);
@@ -1233,12 +1289,39 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
     addToast("success", "Tax & Discount Updated", "GST and discount settings saved successfully.");
   };
 
-  const currentStaff = useMemo(() => {
-    return (
-      employees.find((e) => e.branchId === selectedBranchId) ||
-      employees[0]
-    );
-  }, [employees, selectedBranchId]);
+  const currentStaff = useMemo<Employee>(() => {
+    if (currentUser?.email) {
+      const match = employees.find(
+        (e) => e.email?.toLowerCase() === currentUser.email?.toLowerCase()
+      );
+      if (match) return match;
+    }
+    const branchStaff = employees.find((e) => e.branchId === selectedBranchId);
+    if (branchStaff) return branchStaff;
+    if (employees.length > 0) return employees[0];
+    return {
+      id: currentUser?.id || "",
+      name: currentUser?.name || "Staff Specialist",
+      email: currentUser?.email || "",
+      phone: "",
+      avatar: currentUser?.avatar || "",
+      branchId: selectedBranchId || "",
+      department: "Hair Styling" as const,
+      designation: currentUser?.role || "Stylist",
+      tier: "senior" as StylistTier,
+      joinDate: new Date().toISOString().split("T")[0],
+      salaryBase: 0,
+      commissionRate: 0,
+      status: "active" as const,
+      role: currentUser?.role || "Stylist",
+      skills: [],
+      documentsSubmitted: [],
+      performanceRating: 5.0,
+      monthlyCommission: 0,
+      shiftsThisMonth: 0,
+      leaveBalance: 0,
+    };
+  }, [employees, selectedBranchId, currentUser]);
 
   const filteredServices = useMemo(() => {
     return services.filter(
