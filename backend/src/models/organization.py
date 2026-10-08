@@ -24,6 +24,13 @@ class Organization(TimeStampedModel):
     country = Column(String(100), default="India", nullable=True)
     is_active = Column(Boolean, default=True)
 
+    # Subscription & SaaS Metrics
+    subscription_tier = Column(String(100), default="Starter", nullable=True)
+    mrr = Column(Float, default=0.0)
+    ai_credits_limit = Column(Integer, default=1000)
+    ai_credits_used = Column(Integer, default=0)
+    renewal_date = Column(String(50), nullable=True)
+
     # Dynamic Policy Configuration JSON
     policy_config = Column(JSON, default=lambda: {
         "multi_branch_enabled": True,
@@ -102,3 +109,20 @@ class ServiceAllocation(TimeStampedModel):
     status = Column(String(50), default="active") # active, expired, suspended
 
     organization = relationship("Organization", back_populates="service_allocations")
+
+class SubscriptionPlan(TimeStampedModel):
+    __tablename__ = "subscription_plans"
+
+    name = Column(String(100), nullable=False)
+    code = Column(String(50), unique=True, index=True, nullable=False)
+    description = Column(Text, nullable=True)
+    price_monthly = Column(Float, default=0.0)
+    price_yearly = Column(Float, default=0.0)
+    currency = Column(String(10), default="INR")
+    branches_limit = Column(Integer, default=1)
+    staff_limit = Column(Integer, default=5)
+    ai_credits_limit = Column(Integer, default=1000)
+    features = Column(JSON, default=list)
+    is_popular = Column(Boolean, default=False)
+    is_active = Column(Boolean, default=True)
+    color = Column(String(100), default="border-slate-200 bg-white")

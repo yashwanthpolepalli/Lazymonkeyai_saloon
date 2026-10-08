@@ -71,12 +71,17 @@ def register(req: UserRegisterRequest, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=Token)
 def login(req: UserLoginRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == req.email).first()
+    identifier = req.email.strip()
+    user = db.query(User).filter(
+        (User.email.ilike(identifier)) |
+        (User.name.ilike(identifier)) |
+        (User.phone == identifier)
+    ).first()
+
     if not user or not verify_password(req.password, user.password_hash):
-        # Also check if password was provided in plain text during initial test setup or matches standard hash
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password"
+            detail="Invalid credentials (check username/email or password)"
         )
     
     if not user.is_active:

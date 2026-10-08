@@ -386,11 +386,17 @@ export function StaffDashboardView() {
       {/* Top Welcome Bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs">
         <div className="flex items-center gap-4">
-          <img
-            src={currentStaff.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80"}
-            alt={currentStaff.name}
-            className="w-16 h-16 rounded-2xl object-cover border border-slate-200 shadow-xs"
-          />
+          {currentStaff.avatar ? (
+            <img
+              src={currentStaff.avatar}
+              alt={currentStaff.name}
+              className="w-16 h-16 rounded-2xl object-cover border border-slate-200 shadow-xs"
+            />
+          ) : (
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-sky-600 to-indigo-600 text-white font-bold text-xl flex items-center justify-center shadow-xs border border-sky-200">
+              {(currentStaff.name || "ST").slice(0, 2).toUpperCase()}
+            </div>
+          )}
           <div className="space-y-0.5">
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold uppercase tracking-wider text-sky-700 bg-sky-100 px-2 py-0.5 rounded-md">

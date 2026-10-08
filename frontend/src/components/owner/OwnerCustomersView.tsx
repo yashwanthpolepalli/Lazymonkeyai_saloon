@@ -47,82 +47,26 @@ export function OwnerCustomersView() {
   const [notes, setNotes] = useState("");
 
   // Formula Cards State
-  const [formulaRecords, setFormulaRecords] = useState<any[]>([
-    {
-      id: "fc_01",
-      customer_name: "Aanya Sharma",
-      service_type: "Balayage Highlights & Gloss",
-      date: "2026-03-24",
-      formula_details: {
-        roots: "Matrix 5.0 (30g) + 20 Vol (45g)",
-        mid_lengths: "Matrix 7.32 (40g) + 10 Vol (60g)",
-        toner: "Clear Gloss + 6 Vol (10 min flash rinse)",
-      },
-      processing_time_mins: 45,
-      patch_test_date: "2026-03-20",
-      patch_test_result: "Passed",
-      technique_notes: "V-shaped balayage foils on crown, feathered root transition.",
-      stylist_name: "Elena Rostova",
-    },
-    {
-      id: "fc_02",
-      customer_name: "Priya Nair",
-      service_type: "Keratin Smooth Therapy",
-      date: "2026-03-18",
-      formula_details: {
-        clarifying: "Purifying Detox Pre-Wash (15ml)",
-        keratin_complex: "Brazilian Gold Infusion (60ml)",
-        heat_temp: "210°C (7 passes per section)",
-      },
-      processing_time_mins: 60,
-      patch_test_date: "2026-03-15",
-      patch_test_result: "Passed",
-      technique_notes: "Fine hair texture, avoided root scalp contact by 0.5 inches.",
-      stylist_name: "Sarah Jenkins",
-    },
-  ]);
+  const [formulaRecords, setFormulaRecords] = useState<any[]>([]);
 
   // New Formula Form State
   const [selectedCustForFormula, setSelectedCustForFormula] = useState(customers[0]?.name || "");
   const [formulaServiceType, setFormulaServiceType] = useState("Balayage & Hair Color");
-  const [formulaRoots, setFormulaRoots] = useState("Wella Koleston 6/0 (30g) + 20 Vol (30g)");
-  const [formulaEnds, setFormulaEnds] = useState("Wella Color Touch 8/73 (40g) + 1.9% (80g)");
-  const [formulaProcessingTime, setFormulaProcessingTime] = useState(40);
+  const [formulaRoots, setFormulaRoots] = useState("");
+  const [formulaEnds, setFormulaEnds] = useState("");
+  const [formulaProcessingTime, setFormulaProcessingTime] = useState(30);
   const [formulaPatchTest, setFormulaPatchTest] = useState("Passed");
-  const [formulaNotes, setFormulaNotes] = useState("Root shadow blending with micro-foils.");
+  const [formulaNotes, setFormulaNotes] = useState("");
 
   // Gift Vouchers State
-  const [giftVouchers, setGiftVouchers] = useState<any[]>([
-    {
-      id: "gv_01",
-      code: "GLOW-8842",
-      title: "Bridal Radiance Suite Voucher",
-      initial_amount: 5000,
-      remaining_balance: 5000,
-      recipient_name: "Rhea Kapoor",
-      recipient_phone: "+91 98200 11223",
-      expiry_date: "2026-12-31",
-      status: "active",
-    },
-    {
-      id: "gv_02",
-      code: "FESTIVE-1000",
-      title: "Festive Glam Gift Card",
-      initial_amount: 2500,
-      remaining_balance: 1000,
-      recipient_name: "Vikram Malhotra",
-      recipient_phone: "+91 98111 22334",
-      expiry_date: "2026-09-30",
-      status: "active",
-    },
-  ]);
+  const [giftVouchers, setGiftVouchers] = useState<any[]>([]);
 
   // New Voucher Form State
-  const [voucherTitle, setVoucherTitle] = useState("Prestige Beauty Gift Pass");
-  const [voucherAmount, setVoucherAmount] = useState(3000);
+  const [voucherTitle, setVoucherTitle] = useState("");
+  const [voucherAmount, setVoucherAmount] = useState(0);
   const [voucherRecipient, setVoucherRecipient] = useState("");
   const [voucherPhone, setVoucherPhone] = useState("");
-  const [voucherExpiry, setVoucherExpiry] = useState("2026-12-31");
+  const [voucherExpiry, setVoucherExpiry] = useState(new Date(Date.now() + 90 * 86400000).toISOString().split("T")[0]);
 
   const handleCreateFormula = (e: React.FormEvent) => {
     e.preventDefault();
@@ -193,10 +137,7 @@ export function OwnerCustomersView() {
       phone: phone.trim(),
       email: email.trim() || `${name.toLowerCase().replace(/\s+/g, "")}@example.com`,
       gender: gender as any,
-      avatar: `https://images.unsplash.com/photo-${gender === "male"
-          ? "1507003211169-0a1dd7228f2d"
-          : "1534528741775-53994a69daeb"
-        }?auto=format&fit=crop&w=200&q=80`,
+      avatar: "",
       membershipTier: membershipTier === "none" ? "Rose Silver" : (membershipTier as any),
       notes: notes.trim(),
     });
@@ -380,11 +321,17 @@ export function OwnerCustomersView() {
                     <tr key={c.id} className="hover:bg-slate-50/70 transition-colors">
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-3">
-                          <img
-                            src={c.avatar}
-                            alt={c.name}
-                            className="w-9 h-9 rounded-full object-cover border border-slate-200"
-                          />
+                          {c.avatar ? (
+                            <img
+                              src={c.avatar}
+                              alt={c.name}
+                              className="w-9 h-9 rounded-full object-cover border border-slate-200"
+                            />
+                          ) : (
+                            <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-rose-500 to-amber-500 text-white font-bold text-xs flex items-center justify-center shadow-sm">
+                              {c.name.slice(0, 2).toUpperCase()}
+                            </div>
+                          )}
                           <div>
                             <div className="font-bold text-slate-900">{c.name}</div>
                             <div className="text-[11px] text-slate-400 font-mono flex items-center gap-2">
@@ -464,83 +411,106 @@ export function OwnerCustomersView() {
       {/* TAB 2: FORMULA CARDS & COLOR RECIPES */}
       {activeTab === "formulas" && (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {formulaRecords.map((formula) => (
-              <div
-                key={formula.id}
-                className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs hover:shadow-md transition-all space-y-4"
-              >
-                <div className="flex items-start justify-between border-b border-slate-100 pb-3">
-                  <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md">
-                      {formula.service_type}
-                    </span>
-                    <h3 className="font-bold text-base text-slate-900 mt-1">
-                      {formula.customer_name}
-                    </h3>
-                    <p className="text-[11px] text-slate-400">
-                      Logged on {formula.date} by {formula.stylist_name}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                        formula.patch_test_result === "Passed"
-                          ? "bg-emerald-100 text-emerald-800"
-                          : "bg-rose-100 text-rose-800"
-                      }`}
-                    >
-                      Patch Test: {formula.patch_test_result}
-                    </span>
-                    <p className="text-[11px] text-slate-500 font-mono mt-1">
-                      {formula.processing_time_mins} mins timer
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-2 text-xs bg-slate-50 p-4 rounded-2xl border border-slate-200/60 font-mono">
-                  <div className="text-slate-500 font-bold uppercase text-[10px] tracking-wider mb-1">
-                    Formula Breakdown & Mixing Ratios
-                  </div>
-                  {Object.entries(formula.formula_details).map(([key, val]) => (
-                    <div key={key} className="flex items-start justify-between text-slate-800">
-                      <span className="capitalize font-semibold text-slate-600">{key.replace(/_/g, " ")}:</span>
-                      <span className="text-right font-medium text-slate-900">{String(val)}</span>
-                    </div>
-                  ))}
-                </div>
-
-                {formula.technique_notes && (
-                  <p className="text-xs text-slate-600 bg-amber-50/50 p-3 rounded-xl border border-amber-200/50 italic">
-                    &ldquo;{formula.technique_notes}&rdquo;
-                  </p>
-                )}
-
-                <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
-                  <button
-                    onClick={() => {
-                      addToast("info", "Formula Loaded", `Loaded color formula for ${formula.customer_name}.`);
-                      setActiveModule("pos");
-                      setActiveSubTab("newsale");
-                    }}
-                    className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold cursor-pointer flex items-center gap-1.5"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                    <span>Apply to Next Service</span>
-                  </button>
-                  <span className="text-[11px] text-slate-400 font-mono">ID: {formula.id}</span>
-                </div>
+          {formulaRecords.length === 0 ? (
+            <div className="p-12 rounded-3xl bg-white border border-dashed border-slate-200 text-center space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto text-xl font-bold">
+                🧪
               </div>
-            ))}
-          </div>
+              <h3 className="font-bold text-slate-900 text-sm">No Color Formula Cards Yet</h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                Click &quot;New Formula Card&quot; to log custom hair color recipes, processing timers, and patch test records.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {formulaRecords.map((formula) => (
+                <div
+                  key={formula.id}
+                  className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs hover:shadow-md transition-all space-y-4"
+                >
+                  <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md">
+                        {formula.service_type}
+                      </span>
+                      <h3 className="font-bold text-base text-slate-900 mt-1">
+                        {formula.customer_name}
+                      </h3>
+                      <p className="text-[11px] text-slate-400">
+                        Logged on {formula.date} by {formula.stylist_name}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                          formula.patch_test_result === "Passed"
+                            ? "bg-emerald-100 text-emerald-800"
+                            : "bg-rose-100 text-rose-800"
+                        }`}
+                      >
+                        Patch Test: {formula.patch_test_result}
+                      </span>
+                      <p className="text-[11px] text-slate-500 font-mono mt-1">
+                        {formula.processing_time_mins} mins timer
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 text-xs bg-slate-50 p-4 rounded-2xl border border-slate-200/60 font-mono">
+                    <div className="text-slate-500 font-bold uppercase text-[10px] tracking-wider mb-1">
+                      Formula Breakdown & Mixing Ratios
+                    </div>
+                    {Object.entries(formula.formula_details).map(([key, val]) => (
+                      <div key={key} className="flex items-start justify-between text-slate-800">
+                        <span className="capitalize font-semibold text-slate-600">{key.replace(/_/g, " ")}:</span>
+                        <span className="text-right font-medium text-slate-900">{String(val)}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {formula.technique_notes && (
+                    <p className="text-xs text-slate-600 bg-amber-50/50 p-3 rounded-xl border border-amber-200/50 italic">
+                      &ldquo;{formula.technique_notes}&rdquo;
+                    </p>
+                  )}
+
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                    <button
+                      onClick={() => {
+                        addToast("info", "Formula Loaded", `Loaded color formula for ${formula.customer_name}.`);
+                        setActiveModule("pos");
+                        setActiveSubTab("newsale");
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                      <span>Apply to Next Service</span>
+                    </button>
+                    <span className="text-[11px] text-slate-400 font-mono">ID: {formula.id}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {/* TAB 3: GIFT VOUCHERS */}
       {activeTab === "vouchers" && (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {giftVouchers.map((voucher) => (
+          {giftVouchers.length === 0 ? (
+            <div className="p-12 rounded-3xl bg-white border border-dashed border-slate-200 text-center space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto text-xl font-bold">
+                🎁
+              </div>
+              <h3 className="font-bold text-slate-900 text-sm">No Gift Cards or Vouchers Issued Yet</h3>
+              <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                Click &quot;Issue Gift Voucher&quot; to generate prepaid gift cards and promotional balance passes for clients.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {giftVouchers.map((voucher) => (
               <div
                 key={voucher.id}
                 className="bg-gradient-to-br from-white to-slate-50 rounded-3xl p-6 border border-slate-200/80 shadow-xs hover:shadow-md transition-all space-y-4 relative overflow-hidden"
@@ -615,6 +585,7 @@ export function OwnerCustomersView() {
               </div>
             ))}
           </div>
+          )}
         </div>
       )}
 

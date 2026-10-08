@@ -18,10 +18,14 @@ import { Modal } from "@/components/ui/Modal";
 import { useSalon } from "@/context/SalonContext";
 import {
   downloadCsvFile,
-  parseCsvText,
+  downloadJsonlFile,
+  parseUniversalText,
   SAMPLE_SERVICES_CSV,
+  SAMPLE_SERVICES_JSONL,
   SAMPLE_CUSTOMERS_CSV,
+  SAMPLE_CUSTOMERS_JSONL,
   SAMPLE_INVENTORY_CSV,
+  SAMPLE_INVENTORY_JSONL,
   DEMO_DUMP_SERVICES,
 } from "@/lib/csvHelper";
 import { Service, Customer, InventoryProduct } from "@/types";
@@ -51,6 +55,7 @@ export function DataImportModal({
     setInventory,
     categories,
     selectedBranchId,
+    hydrateFromBackend,
     addToast,
   } = useSalon();
 
@@ -58,9 +63,10 @@ export function DataImportModal({
   const [dragActive, setDragActive] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileSize, setFileSize] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [rawText, setRawText] = useState<string>("");
   const [parsedHeaders, setParsedHeaders] = useState<string[]>([]);
-  const [parsedRows, setParsedRows] = useState<Record<string, string>[]>([]);
+  const [parsedRows, setParsedRows] = useState<Record<string, any>[]>([]);
   const [importMode, setImportMode] = useState<"append" | "replace">("append");
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -68,25 +74,31 @@ export function DataImportModal({
   const config = {
     services: {
       title: "Import Services & Treatments",
-      subtitle: "Bulk import salon services catalog from CSV or Excel file",
+      subtitle: "Bulk import salon services catalog from CSV, JSONL, or Excel file",
       sampleFilename: "Sample_Salon_Services_Catalog.csv",
       sampleCsv: SAMPLE_SERVICES_CSV,
+      sampleJsonlFilename: "Sample_Salon_Services.jsonl",
+      sampleJsonl: SAMPLE_SERVICES_JSONL,
       badgeColor: "bg-pink-100 text-pink-700 border-pink-200",
       iconColor: "text-pink-600",
     },
     customers: {
       title: "Import Customer & Client Records",
-      subtitle: "Bulk import client contact book, VIP tiers, and balances",
+      subtitle: "Bulk import client contact book from CSV, JSONL, or Excel",
       sampleFilename: "Sample_Salon_Customers_Directory.csv",
       sampleCsv: SAMPLE_CUSTOMERS_CSV,
+      sampleJsonlFilename: "Sample_Salon_Customers.jsonl",
+      sampleJsonl: SAMPLE_CUSTOMERS_JSONL,
       badgeColor: "bg-purple-100 text-purple-700 border-purple-200",
       iconColor: "text-purple-600",
     },
     inventory: {
       title: "Import Inventory & Stock Catalog",
-      subtitle: "Bulk import retail products, salon consumables, and stock levels",
+      subtitle: "Bulk import retail products & stock catalog from CSV, JSONL, or Excel",
       sampleFilename: "Sample_Salon_Inventory_Stock.csv",
       sampleCsv: SAMPLE_INVENTORY_CSV,
+      sampleJsonlFilename: "Sample_Salon_Inventory.jsonl",
+      sampleJsonl: SAMPLE_INVENTORY_JSONL,
       badgeColor: "bg-amber-100 text-amber-700 border-amber-200",
       iconColor: "text-amber-600",
     },
@@ -96,44 +108,73 @@ export function DataImportModal({
     downloadCsvFile(config.sampleFilename, config.sampleCsv);
     addToast(
       "success",
-      "Sample File Downloaded",
+      "Sample CSV Downloaded",
       `Saved ${config.sampleFilename} with formatted columns and dummy records.`
     );
   };
 
+  const handleDownloadSampleJsonl = () => {
+    downloadJsonlFile(config.sampleJsonlFilename, config.sampleJsonl);
+    addToast(
+      "success",
+      "Sample JSONL Downloaded",
+      `Saved ${config.sampleJsonlFilename} in JSON Lines (ndjson) format.`
+    );
+  };
+
   const handleLoadDemoDump = () => {
+    setSelectedFile(null);
     setFileName("Demo_Luxury_Catalog_Dump.csv");
     setFileSize("1.8 KB");
     setRawText(config.sampleCsv);
-    const parsed = parseCsvText(config.sampleCsv);
+    const parsed = parseUniversalText(config.sampleCsv);
     setParsedHeaders(parsed.headers);
     setParsedRows(parsed.rows);
     addToast("info", "Sample Dump Loaded", `${parsed.rows.length} demo records loaded into preview.`);
   };
 
-  const processFileContent = (text: string, name: string, size: number) => {
-    setFileName(name);
-    setFileSize(`${(size / 1024).toFixed(1)} KB`);
-    setRawText(text);
-
-    const parsed = parseCsvText(text);
-    if (parsed.errors.length > 0) {
-      addToast("error", "CSV Parse Warning", parsed.errors.join(", "));
-    }
+  const handleLoadDemoJsonlDump = () => {
+    setSelectedFile(null);
+    setFileName("Demo_Services_Dump.jsonl");
+    setFileSize("1.2 KB");
+    setRawText(config.sampleJsonl);
+    const parsed = parseUniversalText(config.sampleJsonl, "demo.jsonl");
     setParsedHeaders(parsed.headers);
     setParsedRows(parsed.rows);
+    addToast("info", "Sample JSONL Loaded", `${parsed.rows.length} JSON Lines records loaded into preview.`);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    loadFileInput(file);
+  };
+
+  const loadFileInput = (file: File) => {
+    setSelectedFile(file);
+    setFileName(file.name);
+    const sizeInMb = file.size / (1024 * 1024);
+    setFileSize(sizeInMb >= 1 ? `${sizeInMb.toFixed(2)} MB` : `${(file.size / 1024).toFixed(1)} KB`);
+
+    // For large files (> 2MB), only read preview slice (100KB) to prevent UI thread freeze
+    const isLarge = file.size > 2 * 1024 * 1024;
+    const blobToRead = isLarge ? file.slice(0, 100 * 1024) : file;
 
     const reader = new FileReader();
     reader.onload = (event) => {
       const content = event.target?.result as string;
-      processFileContent(content, file.name, file.size);
+      setRawText(content);
+      const parsed = parseUniversalText(content, file.name);
+      if (parsed.errors.length > 0 && !isLarge) {
+        addToast("error", "Data Parse Warning", parsed.errors.join(", "));
+      }
+      setParsedHeaders(parsed.headers);
+      setParsedRows(parsed.rows);
+      if (isLarge) {
+        addToast("info", "Large File Preview", `Loaded first ${parsed.rows.length} rows preview. Stream ingest will process all ${sizeInMb.toFixed(1)} MB in backend.`);
+      }
     };
-    reader.readAsText(file);
+    reader.readAsText(blobToRead);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -151,16 +192,12 @@ export function DataImportModal({
     setDragActive(false);
     const file = e.dataTransfer.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const content = event.target?.result as string;
-        processFileContent(content, file.name, file.size);
-      };
-      reader.readAsText(file);
+      loadFileInput(file);
     }
   };
 
   const handleReset = () => {
+    setSelectedFile(null);
     setFileName(null);
     setFileSize(null);
     setRawText("");
@@ -171,13 +208,85 @@ export function DataImportModal({
     }
   };
 
-  const handleCommitImport = () => {
-    if (parsedRows.length === 0) {
+  const handleCommitImport = async () => {
+    if (parsedRows.length === 0 && !selectedFile) {
       addToast("warning", "No Data", "Please select a valid CSV file or load sample data.");
       return;
     }
 
     setIsProcessing(true);
+
+    // If a real file is attached, stream directly to backend DB batch ingestor
+    if (selectedFile) {
+      try {
+        const formData = new FormData();
+        formData.append("file", selectedFile);
+        formData.append("data_type", dataType);
+        formData.append("mode", importMode);
+        if (selectedBranchId) formData.append("branch_id", selectedBranchId);
+
+        const apiBase = ((import.meta as any).env?.VITE_API_URL as string) || "http://localhost:8000/api/v1";
+        const cleanBase = apiBase.replace(/\/+$/, "");
+        const uploadUrl = cleanBase.endsWith("/api/v1")
+          ? `${cleanBase}/bulk-import/upload`
+          : `${cleanBase}/api/v1/bulk-import/upload`;
+
+        const res = await fetch(uploadUrl, {
+          method: "POST",
+          body: formData,
+        });
+
+        if (res.ok) {
+          const result = await res.json();
+          addToast(
+            "success",
+            "High-Speed Bulk Ingest Complete! ⚡",
+            `${result.rows_inserted.toLocaleString()} records ingested directly into database in ${result.elapsed_seconds}s (${result.speed_rows_per_sec.toLocaleString()} rows/sec).`
+          );
+          await hydrateFromBackend();
+          setIsProcessing(false);
+          handleReset();
+          onClose();
+          if (onImportComplete) onImportComplete();
+          return;
+        }
+      } catch (err) {
+        console.warn("Backend bulk file ingest offline/failed, falling back:", err);
+      }
+    }
+
+    // If no file but parsed rows exist (e.g. 1-Click Load Demo Dump), send JSON to backend
+    if (!selectedFile && parsedRows.length > 0) {
+      try {
+        const apiBase = ((import.meta as any).env?.VITE_API_URL as string) || "http://localhost:8000/api/v1";
+        const cleanBase = apiBase.replace(/\/+$/, "");
+        const jsonUrl = cleanBase.endsWith("/api/v1")
+          ? `${cleanBase}/bulk-import/json`
+          : `${cleanBase}/api/v1/bulk-import/json`;
+
+        const res = await fetch(jsonUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            data_type: dataType,
+            mode: importMode,
+            branch_id: selectedBranchId,
+            rows: parsedRows,
+          }),
+        });
+
+        if (res.ok) {
+          const result = await res.json();
+          addToast(
+            "success",
+            "Database Ingestion Complete!",
+            `${result.rows_inserted} records saved directly to your PostgreSQL database.`
+          );
+        }
+      } catch (err) {
+        console.warn("Backend JSON ingest offline, updating local state:", err);
+      }
+    }
 
     setTimeout(() => {
       try {
@@ -187,16 +296,35 @@ export function DataImportModal({
               row["Service Name"] ||
               row["Name"] ||
               row["service_name"] ||
+              row["product_name"] ||
+              row["product_name_en"] ||
+              row["generic_name"] ||
+              row["title"] ||
+              row["item_name"] ||
+              row["treatment_name"] ||
               row["name"] ||
+              (row["brand"] && row["code"] ? `${row["brand"]} #${row["code"]}` : null) ||
               `Custom Service ${idx + 1}`;
             const categoryName =
               row["Category"] ||
               row["category"] ||
               row["Category Name"] ||
+              row["categories"] ||
+              row["brand"] ||
               "Hair Couture & Styling";
             const basePrice =
-              parseFloat(row["Base Price (INR)"] || row["Base Price"] || row["Price"] || row["price"] || "2000") ||
-              2000;
+              parseFloat(
+                String(
+                  row["Base Price (INR)"] ||
+                    row["Base Price"] ||
+                    row["Price"] ||
+                    row["price"] ||
+                    row["retail_price"] ||
+                    row["cost_price"] ||
+                    row["mrp"] ||
+                    "2000"
+                ).replace(/[^\d.]/g, "")
+              ) || 2000;
             const durationMinutes =
               parseInt(
                 row["Duration (Minutes)"] ||
@@ -233,9 +361,8 @@ export function DataImportModal({
               shortDesc,
               fullDesc: shortDesc,
               gender,
-              branchIds: ["br_mumbai", "br_delhi", "br_bengaluru", "br_dubai", "br_london"],
-              image:
-                "https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&q=80&w=400",
+              branchIds: selectedBranchId ? [selectedBranchId] : [],
+              image: "",
               requiredSkills: ["Styling"],
             };
           });
@@ -289,7 +416,7 @@ export function DataImportModal({
               name,
               phone,
               email,
-              avatar: `https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200`,
+              avatar: "",
               gender,
               joinedDate: new Date().toISOString().split("T")[0],
               preferredBranchId: selectedBranchId,
@@ -339,17 +466,17 @@ export function DataImportModal({
             const unit = (row["Unit"] as any) || "bottles";
             const costPrice =
               parseFloat(
-                row["Cost Price (INR)"] || row["Cost Price"] || "1000"
-              ) || 1000;
+                row["Cost Price (INR)"] || row["Cost Price"] || "0"
+              ) || 0;
             const retailPrice =
               parseFloat(
-                row["Retail Price (INR)"] || row["Retail Price"] || "1800"
-              ) || 1800;
+                row["Retail Price (INR)"] || row["Retail Price"] || "0"
+              ) || 0;
             const currentStock =
-              parseInt(row["Current Stock"] || row["Stock"] || "20") || 20;
+              parseInt(row["Current Stock"] || row["Stock"] || "0") || 0;
             const reorderThreshold =
               parseInt(row["Reorder Level"] || "5") || 5;
-            const supplier = row["Supplier"] || "Official Distributor";
+            const supplier = row["Supplier"] || "";
 
             return {
               id: generateId("prod"),
@@ -360,10 +487,9 @@ export function DataImportModal({
               unit,
               costPrice,
               retailPrice,
-              stocksByBranch: {
-                br_mumbai: { current: currentStock, minThreshold: reorderThreshold, optimal: currentStock * 2 },
-                br_delhi: { current: Math.floor(currentStock * 0.8), minThreshold: reorderThreshold, optimal: currentStock * 2 },
-              },
+              stocksByBranch: selectedBranchId ? {
+                [selectedBranchId]: { current: currentStock, minThreshold: reorderThreshold, optimal: currentStock * 2 },
+              } : {},
               currentStock,
               reorderThreshold,
               supplier,
@@ -413,7 +539,7 @@ export function DataImportModal({
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-bold text-slate-900">{config.title}</h2>
               <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-md border ${config.badgeColor}`}>
-                CSV / Excel Importer
+                CSV / JSONL Importer
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">{config.subtitle}</p>
@@ -436,19 +562,28 @@ export function DataImportModal({
             <div className="space-y-0.5">
               <div className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
                 <Download className="w-4 h-4 text-emerald-600" />
-                <span>Download Sample CSV Template</span>
+                <span>Download Sample Files</span>
               </div>
               <p className="text-[11px] text-emerald-700">
-                Pre-formatted CSV with valid column headers & dummy data.
+                Templates for CSV or JSON Lines (.jsonl).
               </p>
             </div>
-            <button
-              onClick={handleDownloadSample}
-              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs whitespace-nowrap shadow-xs cursor-pointer transition-all hover:scale-[1.02] flex items-center gap-1.5"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Get Sample CSV</span>
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={handleDownloadSample}
+                className="px-2.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs whitespace-nowrap shadow-xs cursor-pointer transition-all hover:scale-[1.02] flex items-center gap-1"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>CSV</span>
+              </button>
+              <button
+                onClick={handleDownloadSampleJsonl}
+                className="px-2.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs whitespace-nowrap shadow-xs cursor-pointer transition-all hover:scale-[1.02] flex items-center gap-1"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>JSONL</span>
+              </button>
+            </div>
           </div>
 
           <div className="p-4 rounded-2xl bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200/80 flex items-center justify-between gap-3">
@@ -458,16 +593,25 @@ export function DataImportModal({
                 <span>1-Click Load Demo Dump</span>
               </div>
               <p className="text-[11px] text-indigo-700">
-                Instant test: load 8 luxury catalog records into preview.
+                Instant test: load pre-formatted luxury records.
               </p>
             </div>
-            <button
-              onClick={handleLoadDemoDump}
-              className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs whitespace-nowrap shadow-xs cursor-pointer transition-all hover:scale-[1.02] flex items-center gap-1.5"
-            >
-              <Database className="w-3.5 h-3.5" />
-              <span>Load Demo Data</span>
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={handleLoadDemoDump}
+                className="px-2.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs whitespace-nowrap shadow-xs cursor-pointer transition-all hover:scale-[1.02] flex items-center gap-1"
+              >
+                <Database className="w-3.5 h-3.5" />
+                <span>CSV Demo</span>
+              </button>
+              <button
+                onClick={handleLoadDemoJsonlDump}
+                className="px-2.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs whitespace-nowrap shadow-xs cursor-pointer transition-all hover:scale-[1.02] flex items-center gap-1"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>JSONL Demo</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -475,7 +619,7 @@ export function DataImportModal({
         <input
           ref={fileInputRef}
           type="file"
-          accept=".csv,.txt,.tsv"
+          accept=".csv,.jsonl,.json,.txt,.tsv"
           onChange={handleFileChange}
           className="hidden"
         />
@@ -497,10 +641,10 @@ export function DataImportModal({
             </div>
             <div className="space-y-1">
               <p className="text-sm font-bold text-slate-800">
-                Click to upload or drag & drop your CSV file here
+                Click to upload or drag & drop your CSV or JSONL file here
               </p>
               <p className="text-xs text-slate-400">
-                Supports .CSV, .TXT (Comma-Separated, UTF-8 encoded). Max 10MB.
+                Supports .CSV, .JSONL (JSON Lines), .JSON, .TXT. Direct stream ingestion into PostgreSQL.
               </p>
             </div>
           </div>
@@ -599,7 +743,12 @@ export function DataImportModal({
                       </td>
                       {parsedHeaders.map((h, i) => (
                         <td key={i} className="py-2 px-3 max-w-[200px] truncate text-slate-800">
-                          {row[h] || "—"}
+                          {(() => {
+                            const v = row[h];
+                            if (v === null || v === undefined || v === "") return "—";
+                            if (typeof v === "object") return Array.isArray(v) ? v.join(", ") : JSON.stringify(v);
+                            return String(v);
+                          })()}
                         </td>
                       ))}
                     </tr>

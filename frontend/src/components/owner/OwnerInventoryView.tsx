@@ -40,50 +40,16 @@ export function OwnerInventoryView() {
   const [costPrice, setCostPrice] = useState("800");
   const [retailPrice, setRetailPrice] = useState("1600");
 
-  // Back-Bar Internal Usage State (Invoay / Zenoti)
-  const [backbarItemName, setBackbarItemName] = useState(inventory[0]?.name || "L'Oréal Majirel 5.0");
-  const [backbarQuantity, setBackbarQuantity] = useState("60");
+  // Back-Bar Internal Usage State
+  const [backbarItemName, setBackbarItemName] = useState(inventory[0]?.name || "");
+  const [backbarQuantity, setBackbarQuantity] = useState("0");
   const [backbarUnit, setBackbarUnit] = useState("ml / grams");
-  const [backbarServiceName, setBackbarServiceName] = useState("Global Balayage & Gloss");
-  const [backbarStylist, setBackbarStylist] = useState("Elena Rostova");
-  const [backbarCustomer, setBackbarCustomer] = useState("Aanya Sharma");
-  const [backbarNotes, setBackbarNotes] = useState("Root retouch application.");
+  const [backbarServiceName, setBackbarServiceName] = useState("");
+  const [backbarStylist, setBackbarStylist] = useState("");
+  const [backbarCustomer, setBackbarCustomer] = useState("");
+  const [backbarNotes, setBackbarNotes] = useState("");
 
-  const [consumptionLogs, setConsumptionLogs] = useState<any[]>([
-    {
-      id: "bb_01",
-      product_name: "L'Oréal Majirel 5.0 (Brown)",
-      quantity: 60,
-      unit: "grams",
-      service_name: "Balayage Highlights & Gloss",
-      stylist_name: "Elena Rostova",
-      customer_name: "Aanya Sharma",
-      date: "2026-03-27 14:30",
-      notes: "Roots touch-up (1:1.5 developer mix)",
-    },
-    {
-      id: "bb_02",
-      product_name: "Olaplex No. 1 Bond Multiplier",
-      quantity: 15,
-      unit: "ml",
-      service_name: "Platinum Bleach & Tone",
-      stylist_name: "Sarah Jenkins",
-      customer_name: "Priya Nair",
-      date: "2026-03-27 11:15",
-      notes: "Added into lightener bowl directly",
-    },
-    {
-      id: "bb_03",
-      product_name: "Brazilian Keratin Treatment Complex",
-      quantity: 80,
-      unit: "ml",
-      service_name: "Keratin Smooth Therapy",
-      stylist_name: "Sarah Jenkins",
-      customer_name: "Kavita Rao",
-      date: "2026-03-26 16:00",
-      notes: "Thick coarse hair volume treatment",
-    },
-  ]);
+  const [consumptionLogs, setConsumptionLogs] = useState<any[]>([]);
 
   const handleRecordBackBarUsage = (e: React.FormEvent) => {
     e.preventDefault();
@@ -638,7 +604,7 @@ export function OwnerInventoryView() {
                     type="text"
                     value={backbarStylist}
                     onChange={(e) => setBackbarStylist(e.target.value)}
-                    placeholder="e.g. Elena Rostova"
+                    placeholder="e.g. Alex Johnson"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-500/30"
                   />
                 </div>

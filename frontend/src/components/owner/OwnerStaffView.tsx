@@ -147,96 +147,31 @@ export function OwnerStaffView() {
       notes: string;
       date: string;
     }>
-  >([
-    {
-      id: "att_01",
-      empId: "emp_isabella",
-      empName: "Isabella Moreau",
-      role: "Master Stylist",
-      checkIn: "09:12 AM",
-      checkOut: "06:30 PM",
-      hoursWorked: "8.5 hrs",
-      punchMethod: "Biometric Device (Fingerprint)",
-      status: "Present",
-      notes: "Morning biometric punch verified",
-      date: "05/09/2026",
-    },
-    {
-      id: "att_02",
-      empId: "emp_arjun",
-      empName: "Arjun Singhania",
-      role: "Creative Director",
-      checkIn: "08:58 AM",
+  >(() => {
+    return employees.map((emp, idx) => ({
+      id: `att_${emp.id || idx}`,
+      empId: emp.id,
+      empName: emp.name,
+      role: emp.designation || emp.role || "Stylist",
+      checkIn: "09:00 AM",
       checkOut: "06:00 PM",
       hoursWorked: "8.0 hrs",
-      punchMethod: "Face Recognition Scan",
+      punchMethod: "Biometric Device",
       status: "Present",
-      notes: "AI camera face scan auto-logged",
-      date: "05/09/2026",
-    },
-    {
-      id: "att_03",
-      empId: "emp_priya",
-      empName: "Priya Nair",
-      role: "Senior Balayage Artist",
-      checkIn: "09:05 AM",
-      checkOut: "05:45 PM",
-      hoursWorked: "7.8 hrs",
-      punchMethod: "GPS Geo-Fenced Mobile",
-      status: "Present",
-      notes: "Salon geo-fenced mobile clock-in",
-      date: "05/09/2026",
-    },
-    {
-      id: "att_04",
-      empId: "emp_rohan",
-      empName: "Rohan Kapoor",
-      role: "Executive Barber",
-      checkIn: "08:45 AM",
-      checkOut: "06:15 PM",
-      hoursWorked: "8.5 hrs",
-      punchMethod: "Biometric Device (Fingerprint)",
-      status: "Present",
-      notes: "Biometric hardware sync",
-      date: "05/09/2026",
-    },
-    {
-      id: "att_05",
-      empId: "emp_elena",
-      empName: "Elena Rostova",
-      role: "Nail Artist & Aesthetician",
-      checkIn: "09:30 AM",
-      checkOut: "06:30 PM",
-      hoursWorked: "8.0 hrs",
-      punchMethod: "WFH Web Portal",
-      status: "Present",
-      notes: "Remote web portal punch",
-      date: "05/09/2026",
-    },
-    {
-      id: "att_06",
-      empId: "emp_dev",
-      empName: "Devraj Chauhan",
-      role: "Clinical Skincare Specialist",
-      checkIn: "09:15 AM",
-      checkOut: "06:00 PM",
-      hoursWorked: "8.0 hrs",
-      punchMethod: "Manual Entry (HR Verified)",
-      status: "Present",
-      notes: "Direct administrative timesheet record",
-      date: "05/09/2026",
-    },
-  ]);
+      notes: "Attendance verified",
+      date: new Date().toLocaleDateString("en-GB"),
+    }));
+  });
 
-  // Map Salary Modal State & Live Auto-Formulas (Screenshot 5)
+  // Map Salary Modal State & Live Auto-Formulas
   const [salaryEmpId, setSalaryEmpId] = useState(employees[0]?.id || "");
-  const [basicSalaryVal, setBasicSalaryVal] = useState("5000");
-  const [hraVal, setHraVal] = useState("2000");
-  const [otherAllowancesVal, setOtherAllowancesVal] = useState("1000");
-  const [pfDedVal, setPfDedVal] = useState("600");
-  const [esiVal, setEsiVal] = useState("87.5");
-  const [tdsVal, setTdsVal] = useState("500");
-  const [otherDedVal, setOtherDedVal] = useState("50");
+  const [basicSalaryVal, setBasicSalaryVal] = useState("0");
+  const [hraVal, setHraVal] = useState("0");
+  const [otherAllowancesVal, setOtherAllowancesVal] = useState("0");
+  const [pfDedVal, setPfDedVal] = useState("0");
+  const [esiVal, setEsiVal] = useState("0");
+  const [tdsVal, setTdsVal] = useState("0");
+  const [otherDedVal, setOtherDedVal] = useState("0");
 
   // Auto-calculate on Basic Salary change
   const handleBasicSalaryChange = (val: string) => {

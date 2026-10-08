@@ -81,12 +81,35 @@ def update_service(service_id: str, payload: ServiceUpdate, db: Session = Depend
     db.refresh(service)
     return service
 
-@router.delete("/services/{service_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_service(service_id: str, db: Session = Depends(get_db)):
+@router.delete("/services/clear-all")
+def clear_all_services(
+    organization_id: Optional[str] = None,
+    branch_id: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    query = db.query(Service)
+    if organization_id:
+        query = query.filter(Service.organization_id == organization_id)
+    
+    count = query.count()
+    query.delete(synchronize_session=False)
+    db.commit()
+    return {"status": "success", "message": f"Cleared {count} services from database.", "deleted_count": count}
+
+@router.delete("/services/{service_id}", status_code=status.HTTP_200_OK)
+def delete_service(
+    service_id: str,
+    permanent: bool = True,
+    db: Session = Depends(get_db)
+):
     service = db.query(Service).filter(Service.id == service_id).first()
     if not service:
         raise HTTPException(status_code=404, detail="Service not found")
     
-    service.is_active = False
+    if permanent:
+        db.delete(service)
+    else:
+        service.is_active = False
     db.commit()
-    return None
+    return {"status": "success", "message": f"Service {service_id} deleted successfully."}
+

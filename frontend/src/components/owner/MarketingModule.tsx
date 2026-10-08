@@ -183,7 +183,7 @@ export function MarketingModule() {
                 &ldquo;Where Parisian light kisses bespoke hair geometry. Elevate your autumn glow with our master French Balayage ritual at {selectedBranch.name}. Reserve your private suite session today. Use code <strong>AUTUMNROYAL20</strong> for 20% privilege.&rdquo;
               </p>
               <div className="text-[11px] text-amber-300 font-mono">
-                #HauteCoutureBeauty #{selectedBranch.city}Salon #LazyMonkeyAI #LuxuryHair
+                #HauteCoutureBeauty #{selectedBranch.city}Salon #SalonLife #LuxuryHair
               </div>
             </div>
           )}

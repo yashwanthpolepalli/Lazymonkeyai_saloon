@@ -34,6 +34,11 @@ class OrganizationCreate(BaseModel):
     state: Optional[str] = None
     country: Optional[str] = None
     policy_config: Optional[Dict[str, Any]] = None
+    subscription_tier: Optional[str] = "Starter"
+    mrr: Optional[float] = 0.0
+    ai_credits_limit: Optional[int] = 1000
+    ai_credits_used: Optional[int] = 0
+    renewal_date: Optional[str] = None
 
 class OrganizationUpdate(BaseModel):
     name: Optional[str] = None
@@ -52,6 +57,11 @@ class OrganizationUpdate(BaseModel):
     country: Optional[str] = None
     policy_config: Optional[Dict[str, Any]] = None
     is_active: Optional[bool] = None
+    subscription_tier: Optional[str] = None
+    mrr: Optional[float] = None
+    ai_credits_limit: Optional[int] = None
+    ai_credits_used: Optional[int] = None
+    renewal_date: Optional[str] = None
 
 class OrganizationResponse(BaseModel):
     id: str
@@ -73,6 +83,64 @@ class OrganizationResponse(BaseModel):
     country: Optional[str] = None
     is_active: bool
     policy_config: Optional[Dict[str, Any]] = None
+    subscription_tier: Optional[str] = "Starter"
+    mrr: Optional[float] = 0.0
+    ai_credits_limit: Optional[int] = 1000
+    ai_credits_used: Optional[int] = 0
+    renewal_date: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+# ==================== SUBSCRIPTION PLAN SCHEMAS ====================
+
+class SubscriptionPlanCreate(BaseModel):
+    name: str
+    code: Optional[str] = None
+    description: Optional[str] = None
+    price_monthly: float = 0.0
+    price_yearly: Optional[float] = None
+    currency: Optional[str] = "INR"
+    branches_limit: Optional[int] = 1
+    staff_limit: Optional[int] = 5
+    ai_credits_limit: Optional[int] = 1000
+    features: Optional[List[str]] = None
+    is_popular: Optional[bool] = False
+    is_active: Optional[bool] = True
+    color: Optional[str] = "border-slate-200 bg-white"
+
+class SubscriptionPlanUpdate(BaseModel):
+    name: Optional[str] = None
+    code: Optional[str] = None
+    description: Optional[str] = None
+    price_monthly: Optional[float] = None
+    price_yearly: Optional[float] = None
+    currency: Optional[str] = None
+    branches_limit: Optional[int] = None
+    staff_limit: Optional[int] = None
+    ai_credits_limit: Optional[int] = None
+    features: Optional[List[str]] = None
+    is_popular: Optional[bool] = None
+    is_active: Optional[bool] = None
+    color: Optional[str] = None
+
+class SubscriptionPlanResponse(BaseModel):
+    id: str
+    name: str
+    code: str
+    description: Optional[str] = None
+    price_monthly: float = 0.0
+    price_yearly: Optional[float] = None
+    currency: str = "INR"
+    branches_limit: int = 1
+    staff_limit: int = 5
+    ai_credits_limit: int = 1000
+    features: Optional[List[str]] = None
+    is_popular: bool = False
+    is_active: bool = True
+    color: Optional[str] = "border-slate-200 bg-white"
+    created_at: Optional[Any] = None
+    updated_at: Optional[Any] = None
 
     class Config:
         from_attributes = True

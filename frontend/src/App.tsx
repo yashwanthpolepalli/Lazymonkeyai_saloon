@@ -1,5 +1,5 @@
 import React, { useState, Component, ErrorInfo, ReactNode, lazy, Suspense } from "react";
-import { SalonProvider } from "@/context/SalonContext";
+import { SalonProvider, useSalon } from "@/context/SalonContext";
 import { MainNavbar } from "@/components/layout/MainNavbar";
 import { ToastContainer } from "@/components/ui/Toast";
 import { LoginPage } from "@/components/auth/LoginPage";
@@ -60,16 +60,32 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 }
 
 function SalonAppContent() {
-  // Default to showing the luxury Login page on load
-  const [showLoginPage, setShowLoginPage] = useState(true);
+  const { currentUser, logoutUser } = useSalon();
 
-  if (showLoginPage) {
+  // If user has a stored session, don't force login page on refresh
+  const [showLoginPage, setShowLoginPage] = useState(() => {
+    if (typeof window !== "undefined") {
+      const token = localStorage.getItem("auth_token");
+      const savedUser = localStorage.getItem("salon_current_user");
+      if (token || savedUser) {
+        return false;
+      }
+    }
+    return !currentUser;
+  });
+
+  const handleLogout = () => {
+    logoutUser();
+    setShowLoginPage(true);
+  };
+
+  if (showLoginPage || !currentUser) {
     return <LoginPage onLoginSuccess={() => setShowLoginPage(false)} />;
   }
 
   return (
     <div className="bg-white text-slate-900 min-h-screen flex flex-col font-sans">
-      <MainNavbar onLogout={() => setShowLoginPage(true)} />
+      <MainNavbar onLogout={handleLogout} />
       <main className="flex-1 w-full bg-slate-50/50">
         <Suspense
           fallback={
@@ -86,14 +102,14 @@ function SalonAppContent() {
         <div className="max-w-[1720px] mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <span className="text-sm font-bold text-slate-900">
-              LAZYMONKEY<span className="text-amber-600 font-sans text-xs">AI</span> SALON OS
+              SALON<span className="text-amber-600 font-sans text-xs">AI</span> OS
             </span>
             <span className="text-slate-300">|</span>
             <span className="text-slate-500">Luxury Salon & Spa Operating System</span>
           </div>
           <div className="flex items-center gap-6 text-[11px] text-slate-400">
-            <span>Multi-Branch: Mumbai Flagship &bull; Beverly Hills &bull; London Mayfair &bull; Dubai Marina</span>
-            <span>&copy; 2026 LazyMonkey AI Systems</span>
+            <span>Multi-Branch Management &bull; Enterprise Grade</span>
+            <span>&copy; 2026 Salon OS</span>
           </div>
         </div>
       </footer>

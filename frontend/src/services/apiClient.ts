@@ -17,9 +17,7 @@
  * - /api/v1/settings (Customization, GST, MFA, Profile)
  */
 
-const rawUrl: string =
-  ((import.meta as any).env?.VITE_API_URL as string) ||
-  ((import.meta as any).env?.PROD ? "/api/v1" : "http://localhost:8000/api/v1");
+const rawUrl: string = ((import.meta as any).env?.VITE_API_URL as string) || "";
 
 export const API_BASE_URL: string = rawUrl.replace(/\/+$/, "");
 
@@ -40,11 +38,16 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   };
 
   const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
+
   try {
     const res = await fetch(`${API_BASE_URL}${cleanEndpoint}`, {
       ...options,
       headers,
+      signal: options.signal || controller.signal,
     });
+    clearTimeout(timeoutId);
 
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));
@@ -53,6 +56,11 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 
     return await res.json();
   } catch (error) {
+    clearTimeout(timeoutId);
+    if (error instanceof Error && error.name === "AbortError") {
+      console.warn(`[API] Request to ${endpoint} timed out after 5s`);
+      throw new Error("Backend unavailable — request timed out");
+    }
     console.warn(`[BusinessOSAI API] Request to ${endpoint} fallback:`, error);
     throw error;
   }
@@ -104,6 +112,38 @@ export const BranchService = {
 };
 
 // 3. Services & Categories Catalog Service
+export const MasterCatalogService = {
+  getCategories: () => request<any[]>("/master-catalog/categories"),
+  getServices: (params?: { category_id?: string; category_slug?: string; gender?: string; search?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.category_id) query.append("category_id", params.category_id);
+    if (params?.category_slug) query.append("category_slug", params.category_slug);
+    if (params?.gender) query.append("gender", params.gender);
+    if (params?.search) query.append("search", params.search);
+    const qs = query.toString();
+    return request<any[]>(`/master-catalog/services${qs ? `?${qs}` : ""}`);
+  },
+  seedMasterCatalog: () =>
+    request<{ success: boolean; message: string; categories_count: number; services_count: number }>("/master-catalog/seed", {
+      method: "POST",
+    }),
+  adoptServices: (payload: {
+    organization_id?: string;
+    branch_ids?: string[];
+    services: {
+      master_service_id: string;
+      custom_name?: string;
+      custom_price?: number;
+      custom_duration?: number;
+      branch_ids?: string[];
+    }[];
+  }) =>
+    request<{ success: boolean; message: string; adopted_service_ids: string[] }>("/master-catalog/adopt", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+};
+
 export const SalonCatalogService = {
   getCategories: () => request<any[]>("/categories"),
   createCategory: (catData: any) =>
@@ -127,6 +167,12 @@ export const SalonCatalogService = {
     request<void>(`/services/${serviceId}`, {
       method: "DELETE",
     }),
+  clearAllServices: (params?: { organization_id?: string; branch_id?: string }) => {
+    const qs = new URLSearchParams(params as any).toString();
+    return request<any>(`/services/clear-all${qs ? `?${qs}` : ""}`, {
+      method: "DELETE",
+    });
+  },
   getStylists: (branchId?: string) =>
     request<any[]>(`/stylists${branchId ? `?branch_id=${branchId}` : ""}`),
   createStylist: (stylistData: any) =>
@@ -355,9 +401,63 @@ export const OrganizationService = {
       method: "PUT",
       body: JSON.stringify(orgData),
     }),
+  deleteOrganization: (orgId: string) =>
+    request<any>(`/organizations/${orgId}`, { method: "DELETE" }),
 };
 
-// 12. Approval Workflow Service
+// 11b. Super Admin — Owner Onboarding Service
+export const OnboardingService = {
+  provisionOwner: (data: {
+    brand_name: string;
+    owner_name: string;
+    owner_email?: string;
+    owner_phone?: string;
+    owner_password?: string;
+    city?: string;
+    country?: string;
+    business_type?: string;
+    subscription_tier?: string;
+    currency?: string;
+  }) =>
+    request<{
+      success: boolean;
+      message: string;
+      organization_id: string;
+      organization_name: string;
+      owner_id: string;
+      owner_name: string;
+      owner_email: string;
+      username: string;
+      temp_password: string;
+      phone?: string;
+    }>("/onboard-owner", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+};
+
+// 11c. Super Admin — Subscription Plans Service
+export const SubscriptionPlanService = {
+  getPlans: () => request<any[]>("/plans"),
+  createPlan: (data: any) =>
+    request<any>("/plans", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  getPlan: (id: string) => request<any>(`/plans/${id}`),
+  updatePlan: (id: string, data: any) =>
+    request<any>(`/plans/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  deletePlan: (id: string) =>
+    request<{ success: boolean; message: string }>(`/plans/${id}`, {
+      method: "DELETE",
+    }),
+};
+
+
+
 export const ApprovalService = {
   getApprovals: (organizationId?: string, status?: string) => {
     const params = new URLSearchParams();
@@ -532,4 +632,34 @@ export const BackBarService = {
     return request<any[]>(`/inventory/movements${qs ? `?${qs}` : ""}`);
   },
 };
+
+export const apiClient = {
+  auth: AuthService,
+  branch: BranchService,
+  masterCatalog: MasterCatalogService,
+  catalog: SalonCatalogService,
+  appointment: AppointmentService,
+  crm: CRMService,
+  pos: POSService,
+  hrms: HRMSService,
+  inventory: InventoryService,
+  erp: ERPService,
+  settings: SettingsService,
+  organization: OrganizationService,
+  approval: ApprovalService,
+  auditLog: AuditLogService,
+  allocation: AllocationService,
+  formulaCard: FormulaCardService,
+  giftVoucher: GiftVoucherService,
+  pettyCash: PettyCashService,
+  station: StationService,
+  backBar: BackBarService,
+  // Direct helper methods
+  getServices: SalonCatalogService.getServices,
+  createService: SalonCatalogService.createService,
+  updateService: SalonCatalogService.updateService,
+  deleteService: SalonCatalogService.deleteService,
+};
+
+export default apiClient;
 

@@ -47,6 +47,11 @@ app.add_middleware(
 # Mount V1 API Routers
 app.include_router(api_v1_router)
 
+@app.api_route("/favicon.ico", methods=["GET", "HEAD"], include_in_schema=False)
+def favicon():
+    from fastapi import Response
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
 @app.get("/", tags=["Root"])
 def root_endpoint():
     return {

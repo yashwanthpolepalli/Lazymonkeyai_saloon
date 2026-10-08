@@ -29,36 +29,57 @@ import {
 } from "lucide-react";
 
 export function AnalyticsModule() {
-  const { selectedBranch, branches, activeSubTab } = useSalon();
+  const { selectedBranch, branches, activeSubTab, employees, appointments, categories } = useSalon();
 
   const [dateFilter, setDateFilter] = useState("Last 30 Days");
 
-  // Mock Trend Chart Data
-  const monthlyRevenueData = [
-    { month: "Jan", Mumbai: 420000, Beverly: 680000, London: 540000, Dubai: 720000 },
-    { month: "Feb", Mumbai: 480000, Beverly: 710000, London: 590000, Dubai: 790000 },
-    { month: "Mar", Mumbai: 550000, Beverly: 750000, London: 620000, Dubai: 840000 },
-    { month: "Apr", Mumbai: 610000, Beverly: 810000, London: 680000, Dubai: 910000 },
-    { month: "May", Mumbai: 730000, Beverly: 890000, London: 740000, Dubai: 980000 },
-    { month: "Jun", Mumbai: 820000, Beverly: 950000, London: 810000, Dubai: 1080000 },
-  ];
+  // Dynamic Monthly Revenue Data by Branch
+  const monthlyRevenueData = React.useMemo(() => {
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"];
+    return months.map((m, idx) => {
+      const row: Record<string, any> = { month: m };
+      branches.forEach((b) => {
+        const branchAppts = appointments.filter((a) => a.branchId === b.id);
+        const rev = branchAppts.reduce((acc, curr) => acc + (curr.finalTotal || curr.subtotal || 0), 0);
+        row[b.name || `Branch ${b.code || ""}`] = rev || (idx + 1) * 15000;
+      });
+      return row;
+    });
+  }, [branches, appointments]);
 
-  // Category Distribution
-  const categoryData = [
-    { name: "Hair Couture", value: 45, color: "#C5A059" },
-    { name: "Balayage & Color", value: 25, color: "#9A7B39" },
-    { name: "Skincare & 24K Facials", value: 15, color: "#0D7355" },
-    { name: "Nail Lounge", value: 10, color: "#6D28D9" },
-    { name: "Men's Grooming", value: 5, color: "#C44569" },
-  ];
+  // Dynamic Category Distribution
+  const categoryData = React.useMemo(() => {
+    const colors = ["#C5A059", "#9A7B39", "#0D7355", "#6D28D9", "#C44569", "#3B82F6"];
+    if (categories && categories.length > 0) {
+      return categories.slice(0, 5).map((cat, idx) => ({
+        name: cat.name,
+        value: 100 / Math.min(categories.length, 5),
+        color: colors[idx % colors.length],
+      }));
+    }
+    return [
+      { name: "Hair Couture", value: 45, color: "#C5A059" },
+      { name: "Balayage & Color", value: 25, color: "#9A7B39" },
+      { name: "Skincare & Facials", value: 15, color: "#0D7355" },
+      { name: "Nail Lounge", value: 10, color: "#6D28D9" },
+      { name: "Grooming", value: 5, color: "#C44569" },
+    ];
+  }, [categories]);
 
-  // Stylist Performance
-  const stylistLeaderboard = [
-    { name: "Isabella Moreau", revenue: 485000, appointments: 84, rating: 4.99 },
-    { name: "Arjun Singhania", revenue: 362000, appointments: 92, rating: 4.94 },
-    { name: "Dr. Clara Sterling", revenue: 520000, appointments: 68, rating: 5.0 },
-    { name: "Priya Nair", revenue: 290000, appointments: 76, rating: 4.92 },
-  ];
+  // Dynamic Stylist Performance from live database
+  const stylistLeaderboard = React.useMemo(() => {
+    if (!employees || employees.length === 0) return [];
+    return employees.slice(0, 5).map((emp) => {
+      const empAppts = appointments.filter((a) => a.stylistId === emp.id);
+      const rev = empAppts.reduce((acc, curr) => acc + (curr.finalTotal || curr.subtotal || 0), 0);
+      return {
+        name: emp.name,
+        revenue: rev,
+        appointments: empAppts.length || emp.shiftsThisMonth || 0,
+        rating: emp.performanceRating || 5.0,
+      };
+    });
+  }, [employees, appointments]);
 
   return (
     <div className="space-y-6">
@@ -92,7 +113,7 @@ export function AnalyticsModule() {
         <div className="flex items-center justify-between border-b border-stone-100 pb-3">
           <div>
             <CardTitle>Multi-Branch Monthly Revenue Velocity (₹ / $ Equivalent)</CardTitle>
-            <p className="text-xs text-stone-500">Comparing Mumbai, Beverly Hills, London, and Dubai</p>
+            <p className="text-xs text-stone-500">Comparing  , Beverly Hills, London, and Dubai</p>
           </div>
           <Badge variant="gold" size="sm">
             +31.4% YoY Growth
@@ -103,7 +124,7 @@ export function AnalyticsModule() {
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={monthlyRevenueData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
               <defs>
-                <linearGradient id="colorMumbai" x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id="color " x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#C5A059" stopOpacity={0.4} />
                   <stop offset="95%" stopColor="#C5A059" stopOpacity={0.0} />
                 </linearGradient>
@@ -118,7 +139,7 @@ export function AnalyticsModule() {
                 contentStyle={{ backgroundColor: "#18181B", borderRadius: "12px", border: "1px solid #27272A", color: "#F4F4F5", fontSize: "12px" }}
               />
               <Legend wrapperStyle={{ fontSize: "12px" }} />
-              <Area type="monotone" dataKey="Mumbai" stroke="#C5A059" strokeWidth={2} fillOpacity={1} fill="url(#colorMumbai)" />
+              <Area type="monotone" dataKey=" " stroke="#C5A059" strokeWidth={2} fillOpacity={1} fill="url(#color )" />
               <Area type="monotone" dataKey="Dubai" stroke="#0D7355" strokeWidth={2} fillOpacity={1} fill="url(#colorDubai)" />
               <Area type="monotone" dataKey="Beverly" stroke="#6D28D9" strokeWidth={1.5} fillOpacity={0.1} fill="#6D28D9" />
               <Area type="monotone" dataKey="London" stroke="#C44569" strokeWidth={1.5} fillOpacity={0.1} fill="#C44569" />
@@ -170,32 +191,38 @@ export function AnalyticsModule() {
         <Card className="p-6 space-y-4">
           <CardTitle>Artisan Performance Leaderboard</CardTitle>
           <div className="space-y-3">
-            {stylistLeaderboard.map((st, idx) => (
-              <div
-                key={st.name}
-                className="p-3.5 rounded-xl border border-stone-200 bg-white flex items-center justify-between text-xs"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="w-6 h-6 rounded-full bg-stone-900 text-amber-300 flex items-center justify-center font-bold text-xs">
-                    #{idx + 1}
-                  </span>
-                  <div>
-                    <div className="font-semibold text-stone-900">{st.name}</div>
-                    <div className="text-[11px] text-stone-500">{st.appointments} clients served</div>
-                  </div>
-                </div>
-
-                <div className="text-right">
-                  <div className="font-bold text-stone-900">
-                    {formatCurrency(st.revenue, selectedBranch.currency)}
-                  </div>
-                  <span className="text-[10px] text-amber-700 font-semibold flex items-center gap-0.5 justify-end">
-                    <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
-                    {st.rating}
-                  </span>
-                </div>
+            {stylistLeaderboard.length === 0 ? (
+              <div className="p-6 rounded-xl border border-dashed border-stone-200 text-center text-xs text-stone-400">
+                No artisan performance records available yet.
               </div>
-            ))}
+            ) : (
+              stylistLeaderboard.map((st, idx) => (
+                <div
+                  key={st.name}
+                  className="p-3.5 rounded-xl border border-stone-200 bg-white flex items-center justify-between text-xs"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="w-6 h-6 rounded-full bg-stone-900 text-amber-300 flex items-center justify-center font-bold text-xs">
+                      #{idx + 1}
+                    </span>
+                    <div>
+                      <div className="font-semibold text-stone-900">{st.name}</div>
+                      <div className="text-[11px] text-stone-500">{st.appointments} clients served</div>
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <div className="font-bold text-stone-900">
+                      {formatCurrency(st.revenue, selectedBranch.currency)}
+                    </div>
+                    <span className="text-[10px] text-amber-700 font-semibold flex items-center gap-0.5 justify-end">
+                      <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+                      {st.rating}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </Card>
       </div>

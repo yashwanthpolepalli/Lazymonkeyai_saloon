@@ -111,93 +111,21 @@ export const DEFAULT_POLICY_CONFIG: PolicyConfig = {
   departments: ["Hair Styling", "Skin Care & Aesthetics", "Nail Studio", "Wellness & Spa"],
 };
 
-export const DEFAULT_ORGANIZATIONS: Organization[] = [
-  {
-    id: "org_general",
-    name: "Aura Luxe Salon & Studio",
-    code: "AURA_GEN",
-    business_type: "general",
-    brand_tagline: "Bespoke Hairstyling & Local Esthetics Sanctuary",
-    logo: "https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=200&q=80",
-    currency: "INR",
-    tax_rate: 0.18,
-    gstin_or_tax_id: "27AAAAA0000A1Z5",
-    is_active: true,
-    policy_config: {
-      ...DEFAULT_POLICY_CONFIG,
-      multi_branch_enabled: false,
-      approval_required: false,
-      central_warehouse_enabled: false,
-      internal_entitlement_mode: false,
-      pos_mode: "retail_pos",
-      departments: ["Hair Styling", "Skin Care", "Nail Bar"],
-    },
-  },
-  {
-    id: "org_enterprise",
-    name: "LazyMonkey AI Luxury Chains",
-    code: "LM_CHAIN",
-    business_type: "enterprise_chain",
-    brand_tagline: "Premier Multi-Branch Luxury Salon & Wellness Enterprise",
-    logo: "https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=200&q=80",
-    currency: "INR",
-    tax_rate: 0.18,
-    gstin_or_tax_id: "29BBBBB1111B2Z8",
-    is_active: true,
-    policy_config: {
-      ...DEFAULT_POLICY_CONFIG,
-      multi_branch_enabled: true,
-      approval_required: true,
-      central_warehouse_enabled: true,
-      budget_tracking_enabled: true,
-      pos_mode: "enterprise_pos",
-      departments: ["Hair Couture", "Skin & Aesthetics", "Nail Sanctuary", "VIP Suites"],
-    },
-  },
-  {
-    id: "org_institution",
-    name: "State Wellness & Public Grooming Facility",
-    code: "GOV_INST_01",
-    business_type: "institution_public",
-    brand_tagline: "Institutional Employee Welfare & Beneficiary Care Center",
-    logo: "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&w=200&q=80",
-    currency: "INR",
-    tax_rate: 0.0,
-    is_active: true,
-    policy_config: {
-      ...DEFAULT_POLICY_CONFIG,
-      multi_branch_enabled: true,
-      approval_required: true,
-      central_warehouse_enabled: true,
-      commission_enabled: false,
-      membership_enabled: false,
-      marketing_enabled: false,
-      internal_entitlement_mode: true,
-      budget_tracking_enabled: true,
-      pos_mode: "institutional_allocation",
-      departments: ["Executive Grooming", "Medical Spa", "Staff Welfare", "Departmental Quota"],
-    },
-  },
-  {
-    id: "org_franchise",
-    name: "Velvet Crown Franchise Network",
-    code: "VELVET_FRAN",
-    business_type: "franchise",
-    brand_tagline: "Scalable Premium Franchise Operator Network",
-    logo: "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=200&q=80",
-    currency: "INR",
-    tax_rate: 0.18,
-    is_active: true,
-    policy_config: {
-      ...DEFAULT_POLICY_CONFIG,
-      multi_branch_enabled: true,
-      approval_required: true,
-      central_warehouse_enabled: true,
-      pos_mode: "enterprise_pos",
-      departments: ["Hair Styling", "Spa & Wellness", "Retail Hub"],
-    },
-  },
-];
+export const DEFAULT_ORGANIZATIONS: Organization[] = [];
+
+export const EMPTY_ORGANIZATION: Organization = {
+  id: "",
+  name: "",
+  code: "",
+  business_type: "general",
+  brand_tagline: "",
+  logo: "",
+  currency: "",
+  tax_rate: 0,
+  gstin_or_tax_id: "",
+  is_active: true,
+  policy_config: DEFAULT_POLICY_CONFIG,
+};
 
 interface SalonContextType {
   // Navigation & Role State
@@ -260,6 +188,7 @@ interface SalonContextType {
   updateGstSettings: (updates: Partial<GSTDiscountSettings>) => void;
 
   // Shared Data
+  hydrateFromBackend: () => Promise<void>;
   categories: typeof MOCK_CATEGORIES;
   services: Service[];
   setServices: React.Dispatch<React.SetStateAction<Service[]>>;
@@ -334,10 +263,10 @@ export const defaultSalonContext: SalonContextType = {
   setCurrentUser: () => {},
   loginUser: () => {},
   logoutUser: () => {},
-  currentOrganization: DEFAULT_ORGANIZATIONS[0],
-  organizations: DEFAULT_ORGANIZATIONS,
+  currentOrganization: EMPTY_ORGANIZATION,
+  organizations: [],
   setOrganization: () => {},
-  policyConfig: DEFAULT_ORGANIZATIONS[0].policy_config,
+  policyConfig: DEFAULT_POLICY_CONFIG,
   updatePolicyConfig: () => {},
   approvals: [],
   addApprovalRequest: async () => {},
@@ -347,7 +276,7 @@ export const defaultSalonContext: SalonContextType = {
   serviceAllocations: [],
   addServiceAllocation: async () => {},
   consumeAllocation: async () => {},
-  selectedBranchId: "br_mumbai",
+  selectedBranchId: "",
   setSelectedBranchId: () => {},
   selectedBranch: {} as Branch,
   branches: [],
@@ -376,6 +305,7 @@ export const defaultSalonContext: SalonContextType = {
   gstSettings: {} as GSTDiscountSettings,
   setGstSettings: () => {},
   updateGstSettings: () => {},
+  hydrateFromBackend: async () => {},
   categories: [],
   services: [],
   setServices: () => {},
@@ -442,6 +372,33 @@ const SalonContext = createContext<SalonContextType>(defaultSalonContext);
 const loadFromStorage = <T,>(key: string, fallback: T): T => {
   if (typeof window === "undefined") return fallback;
   try {
+    // Purge legacy mock data cache once
+    if (!localStorage.getItem("salon_data_version_v4_clean")) {
+      const legacyKeys = [
+        "salon_services",
+        "salon_branches",
+        "salon_organizations",
+        "salon_customers",
+        "salon_employees",
+        "salon_stylists",
+        "salon_appointments",
+        "salon_inventory",
+        "salon_invoices",
+        "salon_leaves",
+        "salon_leads",
+        "salon_campaigns",
+        "salon_coupons",
+        "salon_expenses",
+        "salon_tickets",
+        "salon_approvals",
+        "salon_audit_logs",
+        "salon_service_allocations",
+        "salon_current_organization",
+      ];
+      legacyKeys.forEach((k) => localStorage.removeItem(k));
+      localStorage.setItem("salon_data_version_v4_clean", "true");
+    }
+
     const item = localStorage.getItem(key);
     return item ? JSON.parse(item) : fallback;
   } catch {
@@ -450,20 +407,24 @@ const loadFromStorage = <T,>(key: string, fallback: T): T => {
 };
 
 export function SalonProvider({ children }: { children: React.ReactNode }) {
-  const [activeRole, setActiveRole] = useState<Role>("owner");
+  const [activeRole, setActiveRole] = useState<Role>(() => {
+    const savedUser = loadFromStorage("salon_current_user", null);
+    if (savedUser && savedUser.role) return savedUser.role;
+    return loadFromStorage("salon_active_role", "owner");
+  });
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() =>
     loadFromStorage("salon_current_user", null)
   );
 
   // Dynamic Organizations and Policy Config
   const [organizations, setOrganizations] = useState<Organization[]>(() =>
-    loadFromStorage("salon_organizations", DEFAULT_ORGANIZATIONS)
+    loadFromStorage("salon_organizations", [])
   );
   const [currentOrganization, setCurrentOrganization] = useState<Organization>(() =>
-    loadFromStorage("salon_current_organization", DEFAULT_ORGANIZATIONS[0])
+    loadFromStorage("salon_current_organization", EMPTY_ORGANIZATION)
   );
   const [policyConfig, setPolicyConfig] = useState<PolicyConfig>(() =>
-    loadFromStorage("salon_policy_config", DEFAULT_ORGANIZATIONS[0].policy_config)
+    loadFromStorage("salon_policy_config", DEFAULT_POLICY_CONFIG)
   );
 
   // Governance & Workflows state
@@ -477,9 +438,13 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
     loadFromStorage("salon_service_allocations", [])
   );
 
-  const [selectedBranchId, setSelectedBranchId] = useState<string>("br_mumbai");
+  const [selectedBranchId, setSelectedBranchId] = useState<string>(() =>
+    loadFromStorage("salon_selected_branch_id", "")
+  );
   const [activeModule, setActiveModule] = useState<OwnerModule>("workspace");
-  const [activeSubTab, setActiveSubTab] = useState<string>("overview");
+  const [activeSubTab, setActiveSubTab] = useState<string>(() =>
+    loadFromStorage("salon_active_subtab", "overview")
+  );
   const [selectedDate, setSelectedDate] = useState<string>(
     new Date().toISOString().split("T")[0]
   );
@@ -651,83 +616,166 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   // Hydrate state from Backend API (PostgreSQL database)
-  useEffect(() => {
-    const hydrateFromBackend = async () => {
-      try {
-        const [
-          remoteBranches,
-          remoteServices,
-          remoteStylists,
-          remoteCustomers,
-          remoteAppointments,
-          remoteInventory,
-          remoteEmployees,
-          remoteInvoices,
-          remoteOrgs,
-          remoteApprovals,
-          remoteAuditLogs,
-          remoteAllocations,
-        ] = await Promise.allSettled([
-          BranchService.getBranches(),
-          SalonCatalogService.getServices(),
-          SalonCatalogService.getStylists(),
-          CRMService.getCustomers(),
-          AppointmentService.getAppointments(),
-          InventoryService.getItems(),
-          HRMSService.getStaffRoster(),
-          ERPService.getInvoices(50),
-          OrganizationService.getOrganizations(),
-          ApprovalService.getApprovals(),
-          AuditLogService.getAuditLogs(),
-          AllocationService.getAllocations(),
-        ]);
+  const hydrateFromBackend = async () => {
+    try {
+      const [
+        remoteBranches,
+        remoteServices,
+        remoteStylists,
+        remoteCustomers,
+        remoteAppointments,
+        remoteInventory,
+        remoteEmployees,
+        remoteInvoices,
+        remoteOrgs,
+        remoteApprovals,
+        remoteAuditLogs,
+        remoteAllocations,
+      ] = await Promise.allSettled([
+        BranchService.getBranches(),
+        SalonCatalogService.getServices(),
+        SalonCatalogService.getStylists(),
+        CRMService.getCustomers(),
+        AppointmentService.getAppointments(),
+        InventoryService.getItems(),
+        HRMSService.getStaffRoster(),
+        ERPService.getInvoices(50),
+        OrganizationService.getOrganizations(),
+        ApprovalService.getApprovals(),
+        AuditLogService.getAuditLogs(),
+        AllocationService.getAllocations(),
+      ]);
 
-        if (remoteBranches.status === "fulfilled" && remoteBranches.value?.length) {
-          setBranches(remoteBranches.value);
-        }
-        if (remoteServices.status === "fulfilled" && remoteServices.value?.length) {
-          setServices(remoteServices.value);
-        }
-        if (remoteStylists.status === "fulfilled" && remoteStylists.value?.length) {
-          setStylists(remoteStylists.value);
-        }
-        if (remoteCustomers.status === "fulfilled" && remoteCustomers.value?.length) {
-          setCustomers(remoteCustomers.value);
-        }
-        if (remoteAppointments.status === "fulfilled" && remoteAppointments.value?.length) {
-          setAppointments(remoteAppointments.value);
-        }
-        if (remoteInventory.status === "fulfilled" && remoteInventory.value?.length) {
-          setInventory(remoteInventory.value);
-        }
-        if (remoteEmployees.status === "fulfilled" && remoteEmployees.value?.length) {
-          setEmployees(remoteEmployees.value);
-        }
-        if (remoteInvoices.status === "fulfilled" && remoteInvoices.value?.length) {
-          setInvoices(remoteInvoices.value);
-        }
-        if (remoteOrgs.status === "fulfilled" && remoteOrgs.value?.length) {
-          setOrganizations(remoteOrgs.value);
-          // Set current org if not explicitly set
-          if (!currentOrganization || !currentOrganization.id) {
-            setCurrentOrganization(remoteOrgs.value[0]);
-            setPolicyConfig(remoteOrgs.value[0].policy_config || DEFAULT_POLICY_CONFIG);
-          }
-        }
-        if (remoteApprovals.status === "fulfilled" && remoteApprovals.value?.length) {
-          setApprovals(remoteApprovals.value);
-        }
-        if (remoteAuditLogs.status === "fulfilled" && remoteAuditLogs.value?.length) {
-          setAuditLogs(remoteAuditLogs.value);
-        }
-        if (remoteAllocations.status === "fulfilled" && remoteAllocations.value?.length) {
-          setServiceAllocations(remoteAllocations.value);
-        }
-      } catch (err) {
-        console.debug("Backend offline, utilizing local reactive state.", err);
+      if (remoteBranches.status === "fulfilled") {
+        setBranches(remoteBranches.value || []);
       }
-    };
+      if (remoteServices.status === "fulfilled") {
+        const rawServices = remoteServices.value || [];
+        const normalized = rawServices.map((s: any) => ({
+          ...s,
+          id: s.id,
+          categoryId: s.categoryId || s.category_id || "",
+          categoryName: s.categoryName || s.category_name || "",
+          subcategory: s.subcategory || "",
+          name: s.name || "",
+          shortDesc: s.shortDesc || s.short_desc || "",
+          fullDesc: s.fullDesc || s.full_desc || "",
+          basePrice: s.basePrice ?? s.base_price ?? 0,
+          memberPrice: s.memberPrice ?? s.member_price,
+          durationMinutes: s.durationMinutes ?? s.duration_minutes ?? 45,
+          gender: s.gender || ["unisex"],
+          branchIds: s.branchIds || s.branch_ids || [],
+          image: s.image || "",
+          featured: s.featured ?? false,
+          isPopular: s.isPopular ?? s.is_popular ?? false,
+          variants: s.variants || [],
+          branchPricing: s.branchPricing || s.branch_pricing || {},
+          optionGroups: s.optionGroups || s.option_groups || [],
+          addOns: s.addOns || s.add_ons || [],
+          requiredSkills: s.requiredSkills || s.required_skills || [],
+          consumedProducts: s.consumedProducts || s.consumed_products || [],
+        }));
+        setServices(normalized);
+      }
+      if (remoteStylists.status === "fulfilled") {
+        const rawStylists = remoteStylists.value || [];
+        const normalizedStylists = rawStylists.map((st: any) => ({
+          ...st,
+          id: String(st.id ?? ""),
+          name: st.name || "",
+          email: st.email || "",
+          phone: st.phone || "",
+          avatar: st.avatar || "",
+          tier: st.tier || "Senior Artist",
+          tierMultiplier: Number(st.tierMultiplier ?? st.tier_multiplier ?? 1.0),
+          specialties: Array.isArray(st.specialties) ? st.specialties : [],
+          branchId: st.branchId || st.branch_id || "",
+          rating: Number(st.rating ?? 4.5),
+          experienceYears: Number(st.experienceYears ?? st.experience_years ?? 1),
+          bio: st.bio || "",
+          isAvailableToday: Boolean(st.isAvailableToday ?? st.is_available_today ?? true),
+          commissionRate: Number(st.commissionRate ?? st.commission_rate ?? 0.15),
+        }));
+        setStylists(normalizedStylists);
+      }
+      if (remoteCustomers.status === "fulfilled") {
+        const rawCustomers = remoteCustomers.value || [];
+        const normalizedCustomers = rawCustomers.map((c: any) => ({
+          ...c,
+          id: String(c.id ?? ""),
+          name: c.name || "",
+          email: c.email || "",
+          phone: c.phone || "",
+          avatar: c.avatar || "",
+          gender: c.gender || "other",
+          joinedDate: c.joinedDate || c.joined_date || c.createdAt || c.created_at || "",
+          preferredBranchId: c.preferredBranchId || c.preferred_branch_id || "",
+          preferredStylistId: c.preferredStylistId || c.preferred_stylist_id,
+          walletBalance: Number(c.walletBalance ?? c.wallet_balance ?? 0),
+          loyaltyPoints: Number(c.loyaltyPoints ?? c.loyalty_points ?? 0),
+          totalSpent: Number(c.totalSpent ?? c.total_spent ?? c.totalSpend ?? 0),
+          totalSpend: Number(c.totalSpend ?? c.total_spent ?? c.totalSpend ?? 0),
+          visitsCount: Number(c.visitsCount ?? c.visits_count ?? c.totalVisits ?? 0),
+          totalVisits: Number(c.totalVisits ?? c.visits_count ?? c.visitsCount ?? 0),
+          segment: c.segment || "New Customer",
+          membershipTier: c.membershipTier || c.membership_tier ||
+            (typeof c.membership === "object" ? c.membership?.tierName : c.membership) ||
+            undefined,
+          membership: typeof c.membership === "object" ? c.membership : undefined,
+          packages: Array.isArray(c.packages) ? c.packages : [],
+          tags: Array.isArray(c.tags) ? c.tags.map(String) : [],
+          notes: c.notes || "",
+          allergies: Array.isArray(c.allergies) ? c.allergies.map(String) : [],
+          beautyProfile: (typeof c.beautyProfile === "object" && c.beautyProfile !== null)
+            ? c.beautyProfile
+            : (typeof c.beauty_profile === "object" && c.beauty_profile !== null)
+            ? c.beauty_profile
+            : {
+                hairType: "", hairTexture: "", scalpCondition: "",
+                skinType: "", skinConcerns: [], allergies: [],
+                preferredBeverage: "", preferredMusic: "", lastConsultationDate: "",
+              },
+        }));
+        setCustomers(normalizedCustomers);
+      }
+      if (remoteAppointments.status === "fulfilled") {
+        setAppointments(remoteAppointments.value || []);
+      }
+      if (remoteInventory.status === "fulfilled") {
+        setInventory(remoteInventory.value || []);
+      }
+      if (remoteEmployees.status === "fulfilled") {
+        setEmployees(remoteEmployees.value || []);
+      }
+      if (remoteInvoices.status === "fulfilled") {
+        setInvoices(remoteInvoices.value || []);
+      }
+      if (remoteOrgs.status === "fulfilled") {
+        const orgsList = remoteOrgs.value || [];
+        setOrganizations(orgsList);
+        if (orgsList.length > 0) {
+          setCurrentOrganization(orgsList[0]);
+          setPolicyConfig(orgsList[0].policy_config || DEFAULT_POLICY_CONFIG);
+        } else {
+          setCurrentOrganization(EMPTY_ORGANIZATION);
+          setPolicyConfig(DEFAULT_POLICY_CONFIG);
+        }
+      }
+      if (remoteApprovals.status === "fulfilled") {
+        setApprovals(remoteApprovals.value || []);
+      }
+      if (remoteAuditLogs.status === "fulfilled") {
+        setAuditLogs(remoteAuditLogs.value || []);
+      }
+      if (remoteAllocations.status === "fulfilled") {
+        setServiceAllocations(remoteAllocations.value || []);
+      }
+    } catch (err) {
+      console.debug("Backend offline, utilizing local reactive state.", err);
+    }
+  };
 
+  useEffect(() => {
     hydrateFromBackend();
   }, []);
 
@@ -1013,6 +1061,36 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
     }
   }, [serviceAllocations]);
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("salon_active_role", activeRole);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, [activeRole]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && selectedBranchId) {
+      try {
+        localStorage.setItem("salon_selected_branch_id", selectedBranchId);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, [selectedBranchId]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && activeSubTab) {
+      try {
+        localStorage.setItem("salon_active_subtab", activeSubTab);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, [activeSubTab]);
+
   const setOrganization = (org: Organization) => {
     setCurrentOrganization(org);
     if (org.policy_config) {
@@ -1142,8 +1220,10 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
 
   const loginUser = (user: AuthUser, token?: string) => {
     setCurrentUser(user);
-    if (token && typeof window !== "undefined") {
-      localStorage.setItem("auth_token", token);
+    if (typeof window !== "undefined") {
+      if (token) localStorage.setItem("auth_token", token);
+      localStorage.setItem("salon_current_user", JSON.stringify(user));
+      if (user.role) localStorage.setItem("salon_active_role", user.role);
     }
     if (user.role) {
       setActiveRole(user.role);
@@ -1164,6 +1244,10 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
     setCurrentUser(null);
     if (typeof window !== "undefined") {
       localStorage.removeItem("auth_token");
+      localStorage.removeItem("salon_current_user");
+      localStorage.removeItem("salon_active_role");
+      localStorage.removeItem("salon_selected_branch_id");
+      localStorage.removeItem("salon_active_subtab");
     }
     addToast("info", "Signed Out", "You have successfully logged out.");
   };
@@ -1173,9 +1257,9 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
       branches.find((b) => b.id === selectedBranchId) ||
       branches[0] || {
         id: selectedBranchId || "",
-        name: currentOrganization?.name || "Main Branch",
-        code: currentOrganization?.code || "BR-01",
-        branchType: "Studio",
+        name: currentOrganization?.name || "",
+        code: currentOrganization?.code || "",
+        branchType: "",
         managerName: "",
         status: "active",
         phone: currentOrganization?.phone || "",
@@ -1187,15 +1271,15 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
         country: currentOrganization?.country || "",
         pinCode: "",
         mapLocation: "",
-        currency: currentOrganization?.currency || "INR",
-        taxRate: currentOrganization?.tax_rate || 0.18,
-        rating: 5.0,
+        currency: currentOrganization?.currency || "",
+        taxRate: currentOrganization?.tax_rate || 0,
+        rating: 0,
         totalReviews: 0,
         image: "",
         logo: currentOrganization?.logo || "",
         description: currentOrganization?.brand_tagline || "",
         chairsCount: 0,
-        openingHours: "09:00 AM - 09:00 PM",
+        openingHours: "",
       }
     );
   }, [branches, selectedBranchId, currentOrganization]);
@@ -1203,21 +1287,21 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
   const addBranch = (branchData: Partial<Branch>): Branch => {
     const newBranch: Branch = {
       id: generateId("br"),
-      name: branchData.name || "New Branch",
-      code: branchData.code || `BR-0${branches.length + 1}`,
+      name: branchData.name || "",
+      code: branchData.code || "",
       city: branchData.city || "",
-      country: branchData.country || "India",
-      currency: branchData.currency || "INR",
-      taxRate: branchData.taxRate ?? 0.18,
+      country: branchData.country || "",
+      currency: branchData.currency || "",
+      taxRate: branchData.taxRate ?? 0,
       phone: branchData.phone || "",
       email: branchData.email || "",
       address: branchData.address || "",
-      rating: 5.0,
+      rating: 0,
       totalReviews: 0,
       image: branchData.image || "",
       chairsCount: branchData.chairsCount || 0,
-      openingHours: branchData.openingHours || "09:00 AM - 09:00 PM",
-      status: "active",
+      openingHours: branchData.openingHours || "",
+      status: branchData.status || "active",
     };
     setBranches((prev) => [...prev, newBranch]);
 
@@ -1238,7 +1322,7 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
       status: newBranch.status,
     }).catch(() => {});
 
-    addToast("success", "Salon Branch Created", `${newBranch.name} is now active.`);
+    addToast("success", "Salon Branch Created", `${newBranch.name || "Branch"} is now active.`);
     return newBranch;
   };
 
@@ -1301,22 +1385,22 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
     if (employees.length > 0) return employees[0];
     return {
       id: currentUser?.id || "",
-      name: currentUser?.name || "Staff Specialist",
+      name: currentUser?.name || "",
       email: currentUser?.email || "",
       phone: "",
       avatar: currentUser?.avatar || "",
       branchId: selectedBranchId || "",
-      department: "Hair Styling" as const,
-      designation: currentUser?.role || "Stylist",
-      tier: "senior" as StylistTier,
-      joinDate: new Date().toISOString().split("T")[0],
+      department: (currentUser?.department as any) || ("" as any),
+      designation: currentUser?.role || "",
+      tier: "" as StylistTier,
+      joinDate: "",
       salaryBase: 0,
       commissionRate: 0,
       status: "active" as const,
-      role: currentUser?.role || "Stylist",
+      role: currentUser?.role || "",
       skills: [],
       documentsSubmitted: [],
-      performanceRating: 5.0,
+      performanceRating: 0,
       monthlyCommission: 0,
       shiftsThisMonth: 0,
       leaveBalance: 0,
@@ -1324,17 +1408,25 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
   }, [employees, selectedBranchId, currentUser]);
 
   const filteredServices = useMemo(() => {
-    return services.filter(
-      (s) => s.branchIds.includes(selectedBranchId) || s.branchIds.includes("all") || s.branchIds.length === 0
-    );
+    return services.filter((s: any) => {
+      const bIds = s.branchIds || s.branch_ids || [];
+      if (!Array.isArray(bIds) || bIds.length === 0) return true;
+      return bIds.includes(selectedBranchId) || bIds.includes("all");
+    });
   }, [services, selectedBranchId]);
 
   const filteredStylists = useMemo(() => {
-    return stylists.filter((s) => s.branchId === selectedBranchId);
+    return stylists.filter((s: any) => {
+      const bId = s.branchId || s.branch_id;
+      return !bId || bId === selectedBranchId || bId === "all";
+    });
   }, [stylists, selectedBranchId]);
 
   const branchAppointments = useMemo(() => {
-    return appointments.filter((a) => a.branchId === selectedBranchId);
+    return appointments.filter((a: any) => {
+      const bId = a.branchId || a.branch_id;
+      return !bId || bId === selectedBranchId || bId === "all";
+    });
   }, [appointments, selectedBranchId]);
 
   // Toast Handler
@@ -1874,7 +1966,7 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
       name: customerData.name || "Guest Customer",
       email: customerData.email || "",
       phone: customerData.phone || "",
-      avatar: customerData.avatar || `https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200`,
+      avatar: customerData.avatar || "",
       gender: (customerData.gender as any) || "female",
       joinedDate: new Date().toISOString().split("T")[0],
       preferredBranchId: selectedBranchId,
@@ -1923,29 +2015,29 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
       id: generateId("emp"),
       name: empData.name || "New Artisan",
       code: empData.code || `EMP-000${employees.length + 1}`,
-      email: empData.email || "staff@saloon.luxury",
-      phone: empData.phone || "+91 98000 11223",
+      email: empData.email || "",
+      phone: empData.phone || "",
       avatar: empData.avatar || "",
       branchId: empData.branchId || selectedBranchId,
       department: empData.department || "Hair Styling",
       designation: empData.designation || "—",
       tier: empData.tier || "senior",
       joinDate: empData.joinDate || new Date().toISOString().split("T")[0],
-      salaryBase: empData.salaryBase || 45000,
-      basicSalary: empData.basicSalary || 25000,
-      hra: empData.hra || 10000,
-      allowances: empData.allowances || 10000,
-      statutoryDed: empData.statutoryDed || 3000,
-      netTakeHome: empData.netTakeHome || 42000,
-      commissionRate: empData.commissionRate || 15,
+      salaryBase: empData.salaryBase || 0,
+      basicSalary: empData.basicSalary || 0,
+      hra: empData.hra || 0,
+      allowances: empData.allowances || 0,
+      statutoryDed: empData.statutoryDed || 0,
+      netTakeHome: empData.netTakeHome || 0,
+      commissionRate: empData.commissionRate || 0,
       status: "active",
       employmentType: empData.employmentType || "Full-Time",
-      skills: empData.skills || ["Balayage", "Styling"],
-      documentsSubmitted: ["Identity Proof", "Stylist Certification"],
+      skills: empData.skills || [],
+      documentsSubmitted: [],
       performanceRating: 5.0,
       monthlyCommission: 0,
       shiftsThisMonth: 0,
-      leaveBalance: 12,
+      leaveBalance: 0,
     };
     setEmployees((prev) => [newEmp, ...prev]);
 
@@ -1982,16 +2074,14 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
       name: serviceData.name || "New Treatment",
       categoryId: serviceData.categoryId || "cat_hair",
       categoryName: serviceData.categoryName || "Hair Couture & Styling",
-      basePrice: serviceData.basePrice || 2500,
+      basePrice: serviceData.basePrice || 0,
       durationMinutes: serviceData.durationMinutes || 45,
-      shortDesc: serviceData.shortDesc || "Luxury salon treatment.",
-      fullDesc: serviceData.fullDesc || serviceData.shortDesc || "Luxury salon treatment.",
+      shortDesc: serviceData.shortDesc || "",
+      fullDesc: serviceData.fullDesc || serviceData.shortDesc || "",
       gender: serviceData.gender || ["women", "unisex"],
-      branchIds: serviceData.branchIds || ["br_mumbai", "br_delhi", "br_bengaluru", "br_dubai", "br_london"],
-      image:
-        serviceData.image ||
-        "https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&q=80&w=400",
-      requiredSkills: ["Styling"],
+      branchIds: serviceData.branchIds || (selectedBranchId ? [selectedBranchId] : []),
+      image: serviceData.image || "",
+      requiredSkills: serviceData.requiredSkills || [],
     };
     setServices((prev) => [newService, ...prev]);
 
@@ -2021,16 +2111,14 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
       name: item.name || `Service ${idx + 1}`,
       categoryId: item.categoryId || "cat_hair",
       categoryName: item.categoryName || "Hair Couture & Styling",
-      basePrice: item.basePrice || 2000,
+      basePrice: item.basePrice || 0,
       durationMinutes: item.durationMinutes || 45,
-      shortDesc: item.shortDesc || "Luxury salon service.",
-      fullDesc: item.fullDesc || item.shortDesc || "Luxury salon service.",
+      shortDesc: item.shortDesc || "",
+      fullDesc: item.fullDesc || item.shortDesc || "",
       gender: item.gender || ["women", "unisex"],
-      branchIds: item.branchIds || ["br_mumbai", "br_delhi", "br_bengaluru", "br_dubai", "br_london"],
-      image:
-        item.image ||
-        "https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&q=80&w=400",
-      requiredSkills: ["Styling"],
+      branchIds: item.branchIds || (selectedBranchId ? [selectedBranchId] : []),
+      image: item.image || "",
+      requiredSkills: item.requiredSkills || [],
       ...item,
     }));
 
@@ -2046,9 +2134,9 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
     const prepared: Customer[] = newItems.map((item, idx) => ({
       id: item.id || generateId("cust"),
       name: item.name || `Client ${idx + 1}`,
-      phone: item.phone || "+91 98000 00000",
-      email: item.email || `client${idx + 1}@example.com`,
-      avatar: item.avatar || `https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200`,
+      phone: item.phone || "",
+      email: item.email || "",
+      avatar: item.avatar || "",
       gender: item.gender || "female",
       joinedDate: item.joinedDate || new Date().toISOString().split("T")[0],
       preferredBranchId: selectedBranchId,
@@ -2088,21 +2176,21 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
   const bulkAddInventory = (newItems: Partial<InventoryProduct>[], replace: boolean = false) => {
     const prepared: InventoryProduct[] = newItems.map((item, idx) => ({
       id: item.id || generateId("prod"),
-      sku: item.sku || `SKU-IMP-00${idx + 1}`,
+      sku: item.sku || `SKU-PRD-00${idx + 1}`,
       name: item.name || `Product ${idx + 1}`,
-      brand: item.brand || "Luxury Brand",
+      brand: item.brand || "Professional Grade",
       category: item.category || "Hair Care",
-      unit: item.unit || "bottles",
-      costPrice: item.costPrice || 1000,
-      retailPrice: item.retailPrice || 1800,
-      stocksByBranch: item.stocksByBranch || {
-        br_mumbai: { current: item.currentStock || 25, minThreshold: 5, optimal: 50 },
-      },
-      currentStock: item.currentStock || 25,
-      reorderThreshold: item.reorderThreshold || 5,
-      supplier: item.supplier || "Official Supplier",
+      unit: item.unit || "units",
+      costPrice: item.costPrice || 0,
+      retailPrice: item.retailPrice || 0,
+      stocksByBranch: item.stocksByBranch || (selectedBranchId ? {
+        [selectedBranchId]: { current: item.currentStock || 0, minThreshold: item.reorderThreshold || 0, optimal: (item.currentStock || 0) * 2 },
+      } : {}),
+      currentStock: item.currentStock || 0,
+      reorderThreshold: item.reorderThreshold || 0,
+      supplier: item.supplier || "",
       lastRestocked: new Date().toISOString().split("T")[0],
-      isRetail: true,
+      isRetail: item.isRetail ?? true,
       ...item,
     }));
 
@@ -2166,6 +2254,7 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
         setGstSettings,
         updateGstSettings,
         categories: MOCK_CATEGORIES,
+        hydrateFromBackend,
         services,
         setServices,
         filteredServices,

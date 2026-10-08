@@ -52,6 +52,7 @@ import {
 } from "recharts";
 import { AppointmentStatus, GenderType, TimeSlotConfig } from "@/types";
 import { generateId } from "@/lib/utils";
+import { API_BASE_URL } from "@/services/apiClient";
 
 interface CustomScheduleRule {
   id: string;
@@ -1449,12 +1450,12 @@ export function OwnerDashboardView() {
                 <input
                   readOnly
                   type="text"
-                  value={`http://localhost:8000/api/v1/calendar-sync/ical/feed.ics?branch_id=${selectedBranch.id}`}
+                  value={`${API_BASE_URL}/calendar-sync/ical/feed.ics?branch_id=${selectedBranch.id}`}
                   className="flex-1 px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-mono text-slate-700 select-all"
                 />
                 <button
                   onClick={() => {
-                    const url = `http://localhost:8000/api/v1/calendar-sync/ical/feed.ics?branch_id=${selectedBranch.id}`;
+                    const url = `${API_BASE_URL}/calendar-sync/ical/feed.ics?branch_id=${selectedBranch.id}`;
                     navigator.clipboard.writeText(url);
                     setIcalCopied(true);
                     addToast("success", "Feed URL Copied", "Subscribe in Apple Calendar / Outlook / Google.");
@@ -1471,7 +1472,7 @@ export function OwnerDashboardView() {
             {/* Action Buttons */}
             <div className="grid grid-cols-2 gap-3 pt-2">
               <a
-                href={`http://localhost:8000/api/v1/calendar-sync/ical/feed.ics?branch_id=${selectedBranch.id}`}
+                href={`${API_BASE_URL}/calendar-sync/ical/feed.ics?branch_id=${selectedBranch.id}`}
                 download="salon_appointments.ics"
                 className="py-2.5 px-3 rounded-xl border border-sky-200 bg-sky-50 hover:bg-sky-100 text-sky-800 text-xs font-bold text-center flex items-center justify-center gap-2 transition-colors"
               >
@@ -1483,7 +1484,7 @@ export function OwnerDashboardView() {
                 onClick={async () => {
                   setGcalLoading(true);
                   try {
-                    const res = await fetch(`http://localhost:8000/api/v1/calendar-sync/oauth/google-url?branch_id=${selectedBranch.id}`);
+                    const res = await fetch(`${API_BASE_URL}/calendar-sync/oauth/google-url?branch_id=${selectedBranch.id}`);
                     const data = await res.json();
                     if (data.oauth_url) {
                       window.open(data.oauth_url, "_blank");

@@ -7,13 +7,20 @@ import { Badge } from "@/components/ui/Badge";
 import { Building, Shield, FileCode, ToggleLeft } from "lucide-react";
 
 export function SystemModule() {
-  const { branches } = useSalon();
+  const { branches, employees, currentUser } = useSalon();
 
-  const auditLogs = [
-    { time: "Today 09:12 AM", user: "Isabella Moreau", action: "Completed Signature Sculptural Haircut for Ananya Deshmukh", ip: "192.168.1.42" },
-    { time: "Today 08:58 AM", user: "Arjun Singhania", action: "Clocked in at Atelier Mumbai Flagship", ip: "192.168.1.18" },
-    { time: "Yesterday 06:30 PM", user: "Rohan Kapoor", action: "Processed POS Invoice INV-BOM-8820 for ₹6,659.62", ip: "192.168.1.10" },
-    { time: "Yesterday 04:15 PM", user: "Operations Manager", action: "Transferred 100 units Olaplex No.1 from Mumbai to Beverly Hills", ip: "10.0.0.5" },
+  const auditLogs = employees.length > 0 ? employees.slice(0, 4).map((emp, idx) => ({
+    time: "Today " + (9 + idx) + ":00 AM",
+    user: emp.name,
+    action: `Session active at ${branches[0]?.name || "Salon Atelier"}`,
+    ip: `192.168.1.${10 + idx}`,
+  })) : [
+    {
+      time: "Just now",
+      user: currentUser?.name || "System Admin",
+      action: "Secure database session verified",
+      ip: "127.0.0.1",
+    }
   ];
 
   return (

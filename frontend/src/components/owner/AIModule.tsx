@@ -33,7 +33,7 @@ export function AIModule() {
           </div>
           <div>
             <h3 className="text-lg font-bold text-stone-100">
-              LazyMonkey AI Autonomous Intelligence Engine
+              AI Autonomous Intelligence Engine
             </h3>
             <p className="text-xs text-stone-400 mt-0.5">
               Predictive salon floor balancing, dynamic yield pricing, and client retention machine models.

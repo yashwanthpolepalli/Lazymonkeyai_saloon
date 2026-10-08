@@ -121,28 +121,158 @@ export default function Home() {
     <div className="bg-slate-50/50 min-h-[calc(100vh-120px)] py-8">
       <div className="max-w-[1720px] mx-auto px-4 sm:px-6">
         <Suspense fallback={<ViewFallback />}>
-          {/* 1. Customer Role */}
+          {/* 1. Customer / Client Role */}
           {activeRole === "customer" && (
             <>
-              {activeSubTab === "memberships" && <CustomerMembershipsView />}
               {activeSubTab === "booking" && <CustomerBookingView />}
               {activeSubTab === "services" && <CustomerServicesView />}
+              {activeSubTab === "memberships" && <CustomerMembershipsView />}
               {activeSubTab === "wallet" && <CustomerWalletView />}
               {activeSubTab === "payment" && <CustomerPaymentView />}
               {activeSubTab === "invoices" && <CustomerInvoicesView />}
               {![
-                "memberships",
                 "booking",
                 "services",
+                "memberships",
                 "wallet",
                 "payment",
                 "invoices",
-              ].includes(activeSubTab) && <CustomerMembershipsView />}
+              ].includes(activeSubTab) && <CustomerBookingView />}
             </>
           )}
 
-          {/* 2. Owner Role */}
-          {activeRole === "owner" && (
+          {/* 2. Stylist / Staff Role */}
+          {activeRole === "staff" && (
+            <>
+              {activeSubTab === "dashboard" && <StaffDashboardView />}
+              {activeSubTab === "customers" && <OwnerCustomersView />}
+              {activeSubTab === "services" && <OwnerServicesView />}
+              {activeSubTab === "inventory" && <OwnerInventoryView />}
+              {activeSubTab === "attendance" && <StaffAttendanceView />}
+              {activeSubTab === "payrolls" && <StaffPayrollsView />}
+              {![
+                "dashboard",
+                "customers",
+                "services",
+                "inventory",
+                "attendance",
+                "payrolls",
+              ].includes(activeSubTab) && <StaffDashboardView />}
+            </>
+          )}
+
+          {/* 3. Reception / Cashier Role */}
+          {activeRole === "cashier" && (
+            <>
+              {activeSubTab === "dashboard" && <OwnerDashboardView />}
+              {activeSubTab === "customers" && <OwnerCustomersView />}
+              {activeSubTab === "pos" && <OwnerPOSView />}
+              {activeSubTab === "services" && <OwnerServicesView />}
+              {activeSubTab === "inventory" && <OwnerInventoryView />}
+              {![
+                "dashboard",
+                "customers",
+                "pos",
+                "services",
+                "inventory",
+              ].includes(activeSubTab) && <OwnerDashboardView />}
+            </>
+          )}
+
+          {/* 4. Accountant / Auditor Role */}
+          {activeRole === "auditor" && (
+            <>
+              {activeSubTab === "dashboard" && <OwnerDashboardView />}
+              {activeSubTab === "customers" && <OwnerCustomersView />}
+              {activeSubTab === "pos" && <OwnerPOSView />}
+              {activeSubTab === "inventory" && <OwnerInventoryView />}
+              {[
+                "staff",
+                "employees",
+                "payroll",
+                "salary_structure",
+                "payroll_processing",
+                "pf",
+                "esi",
+                "tds",
+                "payslips",
+                "payslip_studio",
+              ].includes(activeSubTab) && <OwnerStaffView />}
+              {activeSubTab === "payrolls" && <StaffPayrollsView />}
+              {![
+                "dashboard",
+                "customers",
+                "pos",
+                "inventory",
+                "staff",
+                "employees",
+                "payroll",
+                "payrolls",
+                "salary_structure",
+                "payroll_processing",
+                "pf",
+                "esi",
+                "tds",
+                "payslips",
+                "payslip_studio",
+              ].includes(activeSubTab) && <OwnerDashboardView />}
+            </>
+          )}
+
+          {/* 5. Branch Manager Role */}
+          {activeRole === "branch_manager" && (
+            <>
+              {activeSubTab === "dashboard" && <OwnerDashboardView />}
+              {activeSubTab === "customers" && <OwnerCustomersView />}
+              {[
+                "staff",
+                "employees",
+                "attendance",
+                "daily_attendance",
+                "biometric",
+                "face_recognition",
+                "gps_attendance",
+                "shift_attendance",
+                "attendance_corrections",
+                "leave",
+                "leaves",
+                "leave_requests",
+                "leave_balances",
+                "leave_policy",
+                "holidays",
+                "payroll",
+                "salary_structure",
+                "payroll_processing",
+                "commissions",
+              ].includes(activeSubTab) && <OwnerStaffView />}
+              {activeSubTab === "pos" && <OwnerPOSView />}
+              {activeSubTab === "services" && <OwnerServicesView />}
+              {activeSubTab === "memberships" && <OwnerMembershipsView />}
+              {activeSubTab === "inventory" && <OwnerInventoryView />}
+              {activeSubTab === "settings" && <OwnerSettingsView initialTab="branches" />}
+              {![
+                "dashboard",
+                "customers",
+                "staff",
+                "employees",
+                "attendance",
+                "leave",
+                "leaves",
+                "payroll",
+                "pos",
+                "services",
+                "memberships",
+                "inventory",
+                "settings",
+              ].includes(activeSubTab) && <OwnerDashboardView />}
+            </>
+          )}
+
+          {/* 6. Super Admin Role */}
+          {(activeRole === "admin" || activeRole === "super_admin") && <SuperAdminView />}
+
+          {/* 7. Owner & Director Roles (Full Master Suite) */}
+          {(activeRole === "owner" || activeRole === "director") && (
             <>
               {activeSubTab === "dashboard" && <OwnerDashboardView />}
               {activeSubTab === "customers" && <OwnerCustomersView />}
@@ -179,8 +309,8 @@ export default function Home() {
               {activeSubTab === "services" && <OwnerServicesView />}
               {activeSubTab === "memberships" && <OwnerMembershipsView />}
               {activeSubTab === "inventory" && <OwnerInventoryView />}
-              {activeSubTab === "governance" && <GovernanceModule />}
-              {activeSubTab === "settings" && <OwnerSettingsView />}
+              {activeSubTab === "governance" && <OwnerSettingsView initialTab="governance" />}
+              {activeSubTab === "settings" && <OwnerSettingsView initialTab="profile" />}
               {![
                 "dashboard",
                 "customers",
@@ -220,21 +350,6 @@ export default function Home() {
               ].includes(activeSubTab) && <OwnerDashboardView />}
             </>
           )}
-
-          {/* 3. Staff Role */}
-          {activeRole === "staff" && (
-            <>
-              {activeSubTab === "dashboard" && <StaffDashboardView />}
-              {activeSubTab === "payrolls" && <StaffPayrollsView />}
-              {activeSubTab === "attendance" && <StaffAttendanceView />}
-              {!["dashboard", "payrolls", "attendance"].includes(activeSubTab) && (
-                <StaffDashboardView />
-              )}
-            </>
-          )}
-
-          {/* 4. Super Admin Role */}
-          {activeRole === "admin" && <SuperAdminView />}
         </Suspense>
       </div>
     </div>

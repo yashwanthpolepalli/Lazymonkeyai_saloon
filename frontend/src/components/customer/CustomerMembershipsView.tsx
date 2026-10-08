@@ -117,8 +117,8 @@ export function CustomerMembershipsView() {
               {currentCustomer.name} &bull; Gold Royalty Tier
             </h1>
             <p className="text-amber-100 text-sm">
-              Membership ID: <span className="font-mono font-semibold text-white">LM-GOLD-88219</span> &bull; 
-              Enrolled at Atelier Flagship Mumbai
+              Membership ID: <span className="font-mono font-semibold text-white">LM-GOLD-88219</span> &bull;
+              Enrolled at Atelier Flagship
             </p>
           </div>
 
@@ -208,11 +208,10 @@ export function CustomerMembershipsView() {
           {membershipTiers.map((tier) => (
             <div
               key={tier.id}
-              className={`bg-white rounded-3xl border ${
-                tier.isCurrent
+              className={`bg-white rounded-3xl border ${tier.isCurrent
                   ? "border-amber-400 ring-2 ring-amber-400/20 shadow-lg"
                   : "border-slate-200 hover:border-slate-300 shadow-sm hover:shadow-md"
-              } p-6 sm:p-7 flex flex-col justify-between transition-all`}
+                } p-6 sm:p-7 flex flex-col justify-between transition-all`}
             >
               <div>
                 <div className="flex items-center justify-between gap-2 mb-3">
@@ -256,11 +255,10 @@ export function CustomerMembershipsView() {
               <div className="mt-8 pt-4 border-t border-slate-100">
                 <button
                   onClick={() => handleRenewUpgrade(tier.name, tier.price)}
-                  className={`w-full py-3 px-4 rounded-xl font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                    tier.isCurrent
+                  className={`w-full py-3 px-4 rounded-xl font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${tier.isCurrent
                       ? "bg-amber-500 hover:bg-amber-600 text-white shadow-md hover:shadow-lg"
                       : "bg-slate-900 hover:bg-slate-800 text-white shadow-xs"
-                  }`}
+                    }`}
                 >
                   <Crown className="w-4 h-4" />
                   <span>{tier.isCurrent ? "Renew Membership" : `Upgrade to ${tier.name}`}</span>

@@ -50,6 +50,7 @@ export function DynamicBookingWizard({ onComplete }: { onComplete?: () => void }
     filteredStylists,
     currentCustomer,
     coupons,
+    customizationSettings,
     addAppointment,
   } = useSalon();
 
@@ -1170,14 +1171,14 @@ export function DynamicBookingWizard({ onComplete }: { onComplete?: () => void }
                   <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
                     <div>
                       <span className="text-[10px] text-amber-400 font-mono tracking-widest uppercase">
-                        LAZYMONKEYAI SALON PASS
+                        {customizationSettings?.salonName ? `${customizationSettings.salonName} PASS` : "SALON VIP PASS"}
                       </span>
                       <h4 className="text-base font-semibold text-stone-100">
                         {selectedBranch.name}
                       </h4>
                     </div>
                     <span className="font-mono text-xs font-bold text-amber-300 px-2 py-1 rounded bg-amber-500/10 border border-amber-500/30">
-                      {confirmedBookingRef || "LM-BOM-8821"}
+                      {confirmedBookingRef || "REF-CONFIRMED"}
                     </span>
                   </div>
 

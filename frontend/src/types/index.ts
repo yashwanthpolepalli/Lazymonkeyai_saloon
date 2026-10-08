@@ -38,6 +38,34 @@ export interface Organization {
   country?: string;
   is_active: boolean;
   policy_config: PolicyConfig;
+  subscription_tier?: string;
+  mrr?: number;
+  ai_credits_limit?: number;
+  ai_credits_used?: number;
+  renewal_date?: string;
+  branches?: any[];
+  users?: any[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface SubscriptionPlan {
+  id: string;
+  name: string;
+  code: string;
+  description?: string;
+  price_monthly: number;
+  price_yearly?: number;
+  currency: string;
+  branches_limit: number;
+  staff_limit: number;
+  ai_credits_limit: number;
+  features?: string[];
+  is_popular: boolean;
+  is_active: boolean;
+  color?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface ApprovalRequest {
@@ -233,6 +261,42 @@ export interface ServiceCategory {
   image: string;
   gender: GenderType[];
   subcategories?: string[];
+  organization_id?: string;
+}
+
+export interface MasterCategory {
+  id: string;
+  name: string;
+  slug: string;
+  icon_name: string;
+  description?: string;
+  display_order: number;
+  subcategories: string[];
+  gender: string[];
+  is_active: boolean;
+  service_count?: number;
+}
+
+export interface MasterService {
+  id: string;
+  category_id: string;
+  category_name: string;
+  subcategory?: string;
+  name: string;
+  short_desc?: string;
+  full_desc?: string;
+  default_duration: number;
+  suggested_price_min: number;
+  suggested_price_max: number;
+  default_price: number;
+  member_price?: number;
+  gender: string[];
+  audience: string;
+  required_skills: string[];
+  add_ons: any[];
+  consumed_products: any[];
+  is_popular: boolean;
+  is_active: boolean;
 }
 
 export interface Stylist {

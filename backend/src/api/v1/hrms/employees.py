@@ -24,15 +24,56 @@ def create_employee(payload: EmployeeCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail=f"Employee with email '{payload.email}' already exists")
     
     emp_count = db.query(Employee).count() + 1
-    code = payload.code or generate_employee_code("SAL", emp_count)
+    data = payload.model_dump()
+    data["code"] = payload.code or generate_employee_code("SAL", emp_count)
     
-    emp = Employee(
-        code=code,
-        **payload.model_dump()
-    )
+    # Ensure branch_id is valid in branches table
+    from src.models.salon import Branch
+    target_branch = db.query(Branch).filter(Branch.id == payload.branch_id).first()
+    if not target_branch:
+        first_branch = db.query(Branch).first()
+        if first_branch:
+            data["branch_id"] = first_branch.id
+        else:
+            default_branch = Branch(
+                id=payload.branch_id or "branch_01",
+                name="Main Flagship Studio",
+                code="BR-001",
+                city="Bangalore",
+                state="Karnataka",
+                country="India",
+                currency="INR",
+                address="100 Feet Road, Indiranagar",
+                phone="+919800000000",
+                whatsapp="+919800000000",
+                email="flagship@saloon.com",
+                is_active=True
+            )
+            db.add(default_branch)
+            db.commit()
+            data["branch_id"] = default_branch.id
+
+    emp = Employee(**data)
     db.add(emp)
     db.commit()
     db.refresh(emp)
+
+    # Automatically provision User login account and dispatch credential email
+    try:
+        from src.services.credential_service import provision_user_account
+        provision_user_account(
+            db=db,
+            name=payload.name.strip(),
+            email=payload.email,
+            phone=payload.phone,
+            role="branch_manager" if "manager" in (payload.role or "").lower() else "staff",
+            organization_id=payload.branch_id if hasattr(payload, "organization_id") else None,
+            branch_id=payload.branch_id,
+            department=payload.department,
+        )
+    except Exception as err:
+        print(f"[HRMS] Warning: Credential provisioning failed for employee: {err}")
+
     return emp
 
 @router.get("/{employee_id}", response_model=EmployeeResponse)

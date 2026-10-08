@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useSalon } from "@/context/SalonContext";
 import {
   Globe,
@@ -29,6 +29,7 @@ import {
   Sliders,
   Zap,
   Eye,
+  EyeOff,
   Trash2,
   Edit3,
   RefreshCw,
@@ -73,6 +74,8 @@ import {
   Pie,
   Cell,
 } from "recharts";
+import { OnboardingService, OrganizationService, SubscriptionPlanService } from "@/services/apiClient";
+import { SubscriptionPlan } from "@/types";
 
 // ==========================================
 // DATA TYPES & INTERFACES FOR SUPER ADMIN
@@ -83,7 +86,7 @@ export interface TenantOwner {
   brandName: string;
   email: string;
   phone: string;
-  plan: "Starter" | "Professional" | "Business" | "Enterprise";
+  plan: string;
   status: "Active" | "Trial" | "Suspended";
   branchesCount: number;
   staffCount: number;
@@ -163,19 +166,65 @@ export function SuperAdminView() {
   // Search, Filter & Drill-down state
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedOwner, setSelectedOwner] = useState<TenantOwner | null>(null);
+  const [selectedOrgs, setSelectedOrgs] = useState<Set<string>>(new Set());
+  const [isDeletingOrgs, setIsDeletingOrgs] = useState(false);
   const [ownerDrillTab, setOwnerDrillTab] = useState<
     "overview" | "branches" | "staff" | "customers" | "bookings" | "finance" | "ai"
   >("overview");
   const [selectedTicket, setSelectedTicket] = useState<SupportTicketItem | null>(null);
   const [ticketReplyText, setTicketReplyText] = useState("");
 
+  // Toggle one row checkbox
+  const toggleOrgSelection = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedOrgs((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  // Toggle all rows
+  const toggleSelectAll = () => {
+    if (selectedOrgs.size === tenants.length) {
+      setSelectedOrgs(new Set());
+    } else {
+      setSelectedOrgs(new Set(tenants.map((t) => t.id)));
+    }
+  };
+
+  // Bulk delete
+  const handleDeleteSelected = async () => {
+    if (selectedOrgs.size === 0) return;
+    const ids = Array.from(selectedOrgs);
+    setIsDeletingOrgs(true);
+    const failed: string[] = [];
+    for (const id of ids) {
+      try {
+        await OrganizationService.deleteOrganization(id);
+      } catch {
+        failed.push(id);
+      }
+    }
+    // Remove successful deletes from local state
+    const toRemove = new Set(ids.filter((id) => !failed.includes(id)));
+    setTenants((prev) => prev.filter((t) => !toRemove.has(t.id)));
+    setSelectedOrgs(new Set(failed));
+    setIsDeletingOrgs(false);
+    if (failed.length === 0) {
+      addToast?.("success", "Organisations Deleted", `${ids.length} organisation${ids.length > 1 ? "s" : ""} deleted successfully.`);
+    } else {
+      addToast?.("error", "Partial Deletion", `${ids.length - failed.length} deleted; ${failed.length} failed. Check console.`);
+    }
+  };
+
   // System Tab Internal Navigation
   const [systemSubTab, setSystemSubTab] = useState<
     "integrations" | "profile" | "security" | "flags" | "health"
   >("integrations");
 
-  // Modals state
-  const [showAddTenantModal, setShowAddTenantModal] = useState(false);
+  // Modals state — showAddTenantModal declared below with isProvisioning/provisionError
   const [showAddServiceModal, setShowAddServiceModal] = useState(false);
 
   // New Tenant Form state
@@ -183,226 +232,119 @@ export function SuperAdminView() {
   const [newBrandName, setNewBrandName] = useState("");
   const [newOwnerEmail, setNewOwnerEmail] = useState("");
   const [newOwnerPhone, setNewOwnerPhone] = useState("");
-  const [newOwnerCity, setNewOwnerCity] = useState("Mumbai");
-  const [newOwnerPlan, setNewOwnerPlan] = useState<"Starter" | "Professional" | "Business" | "Enterprise">("Business");
+  const [newOwnerCity, setNewOwnerCity] = useState("");
+  const [newOwnerPassword, setNewOwnerPassword] = useState("");
+  const [showOwnerPassword, setShowOwnerPassword] = useState(false);
+  const [newOwnerPlan, setNewOwnerPlan] = useState<string>("");
+
+  const emptyPlanForm = {
+    name: "",
+    code: "",
+    description: "",
+    price_monthly: 0,
+    price_yearly: 0,
+    currency: "INR",
+    branches_limit: 1,
+    staff_limit: 1,
+    ai_credits_limit: 0,
+    features: "",
+    is_popular: false,
+    is_active: true,
+    color: "border-slate-200 bg-white",
+  };
+
+  // Subscription Plans DB State & Modals
+  const [subscriptionPlans, setSubscriptionPlans] = useState<SubscriptionPlan[]>([]);
+  const [isLoadingPlans, setIsLoadingPlans] = useState(false);
+  const [showPlanModal, setShowPlanModal] = useState(false);
+  const [editingPlan, setEditingPlan] = useState<SubscriptionPlan | null>(null);
+  const [planForm, setPlanForm] = useState(emptyPlanForm);
 
   // Admin Profile State
   const [adminProfile, setAdminProfile] = useState({
-    name: currentUser?.name || "Platform Super Admin",
-    role: "Super Admin Root",
-    email: currentUser?.email || "admin.root@salon.system",
-    phone: "+91 98200 99999",
-    twoFactorEnabled: true,
-    ipRestrictionsEnabled: true,
+    name: currentUser?.name || "",
+    role: currentUser?.role || "",
+    email: currentUser?.email || "",
+    phone: "",
+    twoFactorEnabled: false,
+    ipRestrictionsEnabled: false,
   });
+
+  const [orgViewMode, setOrgViewMode] = useState<"table" | "cards">("table");
+
+  // Pure dynamic mapper without hardcoded default values
+  const mapOrgToTenant = (org: any): TenantOwner => {
+    return {
+      id: org.id || "",
+      name: org.name || "",
+      brandName: org.name || "",
+      email: org.email || "",
+      phone: org.phone || "",
+      plan: org.subscription_tier || "Starter",
+      status: org.is_active !== false ? "Active" : "Suspended",
+      branchesCount: org.branches?.length || 0,
+      staffCount: org.users?.length || 0,
+      customersCount: org.customers_count || org.customers?.length || 0,
+      bookingsCount: org.bookings_count || org.bookings?.length || 0,
+      mrr: Number(org.mrr || 0),
+      joinedDate: org.created_at ? new Date(org.created_at).toISOString().split("T")[0] : "",
+      renewalDate: org.renewal_date ? new Date(org.renewal_date).toISOString().split("T")[0] : "",
+      city: org.city || "",
+      country: org.country || "",
+      aiCreditsUsed: Number(org.ai_credits_used || 0),
+      aiCreditsLimit: Number(org.ai_credits_limit || 0),
+    };
+  };
 
   // 1. TENANT ORGANIZATIONS (DYNAMIC FROM REGISTERED ORGANIZATIONS)
   const [tenants, setTenants] = useState<TenantOwner[]>(() => {
     if (organizations && organizations.length > 0) {
-      return organizations.map((org) => ({
-        id: org.id,
-        name: org.name,
-        brandName: org.brand_tagline || org.name,
-        email: org.email || `contact@${org.code.toLowerCase()}.luxury`,
-        phone: org.phone || "+91 98200 00000",
-        plan: "Enterprise" as const,
-        status: "Active" as const,
-        branchesCount: 1,
-        staffCount: 10,
-        customersCount: 500,
-        bookingsCount: 250,
-        mrr: 49999,
-        joinedDate: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
-        renewalDate: "01 Jan 2027",
-        city: org.city || "Mumbai",
-        country: org.country || "India",
-        aiCreditsUsed: 5000,
-        aiCreditsLimit: 100000,
-      }));
+      return organizations.map(mapOrgToTenant);
     }
     return [];
   });
 
+  // Fetch all organizations and subscription plans from backend API
+  const fetchPlans = async () => {
+    setIsLoadingPlans(true);
+    try {
+      const data = await SubscriptionPlanService.getPlans();
+      if (data && Array.isArray(data)) {
+        setSubscriptionPlans(data);
+      }
+    } catch (err) {
+      console.error("Failed to load subscription plans:", err);
+    } finally {
+      setIsLoadingPlans(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPlans();
+  }, []);
+
+  useEffect(() => {
+    const fetchOrgs = async () => {
+      try {
+        const orgList = await OrganizationService.getOrganizations();
+        if (orgList && Array.isArray(orgList) && orgList.length > 0) {
+          setTenants(orgList.map(mapOrgToTenant));
+        }
+      } catch (err) {
+        console.error("Failed to load organizations for super admin:", err);
+      }
+    };
+    fetchOrgs();
+  }, [organizations]);
+
   // 2. MASTER UNIVERSAL SERVICE CATALOG
-  const [masterCatalog, setMasterCatalog] = useState<MasterServiceItem[]>([
-    {
-      id: "svc_m_01",
-      category: "Hair Care & Couture",
-      subcategory: "Styling & Cuts",
-      name: "Signature Royal Hair Botox Treatment",
-      audience: "unisex",
-      defaultDurationMin: 90,
-      recommendedPriceINR: 5500,
-      status: "active",
-      tenantAdoptions: 24,
-    },
-    {
-      id: "svc_m_02",
-      category: "Hair Care & Couture",
-      subcategory: "Coloring",
-      name: "French Balayage & Glossing Fusion",
-      audience: "women",
-      defaultDurationMin: 120,
-      recommendedPriceINR: 7800,
-      status: "active",
-      tenantAdoptions: 31,
-    },
-    {
-      id: "svc_m_03",
-      category: "Aesthetics & Advanced Skin",
-      subcategory: "Hydrafacial",
-      name: "24K Liquid Gold Hydrafacial & LED",
-      audience: "women",
-      defaultDurationMin: 60,
-      recommendedPriceINR: 6500,
-      status: "active",
-      tenantAdoptions: 42,
-    },
-    {
-      id: "svc_m_04",
-      category: "Bridal & VIP Suites",
-      subcategory: "Bridal Couture",
-      name: "Bespoke Royal Bridal Makeup & Draping",
-      audience: "women",
-      defaultDurationMin: 180,
-      recommendedPriceINR: 22000,
-      status: "active",
-      tenantAdoptions: 19,
-    },
-    {
-      id: "svc_m_05",
-      category: "Men's Luxury Grooming",
-      subcategory: "Beard & Shave",
-      name: "Turkish Hot Towel Beard Sculpt & Charcoal Mask",
-      audience: "men",
-      defaultDurationMin: 45,
-      recommendedPriceINR: 2400,
-      status: "active",
-      tenantAdoptions: 28,
-    },
-    {
-      id: "svc_m_06",
-      category: "Body Spa & Wellness",
-      subcategory: "Aromatherapy",
-      name: "Swedish Deep Tissue Lava Stone Ritual",
-      audience: "unisex",
-      defaultDurationMin: 75,
-      recommendedPriceINR: 4800,
-      status: "active",
-      tenantAdoptions: 36,
-    },
-  ]);
+  const [masterCatalog, setMasterCatalog] = useState<MasterServiceItem[]>([]);
 
   // 3. SUPPORT TICKETS
-  const [supportTickets, setSupportTickets] = useState<SupportTicketItem[]>([
-    {
-      id: "TCK-10482",
-      tenantId: "org_01",
-      tenantName: "Glam Studio Luxury Chain",
-      subject: "Payment webhook timeout during multi-branch subscription renewal",
-      category: "Billing",
-      priority: "Urgent",
-      status: "Open",
-      createdAt: "10 mins ago",
-      slaBreachHours: 2,
-      assignedTo: "Platform DevOps",
-      messages: [
-        {
-          id: "m_1",
-          sender: "Priya Reddy",
-          role: "owner",
-          time: "10 mins ago",
-          text: "Hi Super Admin team, our Razorpay webhook failed on the Jubilee Hills branch card renewal. Please check the transaction logs.",
-        },
-        {
-          id: "m_2",
-          sender: "System Bot",
-          role: "system",
-          time: "9 mins ago",
-          text: "Automated Telemetry: Gateway HTTP 504 verified on node ap-south-1. Re-queuing transaction.",
-        },
-      ],
-    },
-    {
-      id: "TCK-10480",
-      tenantId: "org_03",
-      tenantName: "Maison De Beauté Paris",
-      subject: "Requesting additional 50,000 AI Hairstyle recommendation credits",
-      category: "AI Feature",
-      priority: "High",
-      status: "In Progress",
-      createdAt: "1 hour ago",
-      slaBreachHours: 6,
-      assignedTo: "AI Product Lead",
-      messages: [
-        {
-          id: "m_1",
-          sender: "Camille Dupont",
-          role: "owner",
-          time: "1 hour ago",
-          text: "We are launching the London Fashion Week pop-up and will exceed our 200k monthly AI quota. Can we provision an add-on bundle?",
-        },
-      ],
-    },
-    {
-      id: "TCK-10475",
-      tenantId: "org_05",
-      tenantName: "Urban Glow Hair & Aesthetics",
-      subject: "Biometric Face Recognition Sync with Attendance Module",
-      category: "Staff HRMS",
-      priority: "Normal",
-      status: "Resolved",
-      createdAt: "5 hours ago",
-      slaBreachHours: 12,
-      assignedTo: "Hardware & IoT Support",
-      messages: [
-        {
-          id: "m_1",
-          sender: "Rohit Verma",
-          role: "owner",
-          time: "5 hours ago",
-          text: "Device IP configured for Bengaluru branch. Face scanner tokens verified.",
-        },
-      ],
-    },
-  ]);
+  const [supportTickets, setSupportTickets] = useState<SupportTicketItem[]>([]);
 
   // 4. AUDIT LOGS
-  const [auditLogs] = useState<AuditLogItem[]>([
-    {
-      id: "AUD-9912",
-      adminName: "Super Admin Root",
-      action: "Upgraded Tenant Plan",
-      tenantName: "Glam Studio Luxury Chain",
-      previousValue: "Professional (₹14,999)",
-      newValue: "Business (₹29,999)",
-      ipAddress: "103.21.244.18",
-      timestamp: "Today · 21:43",
-      severity: "warning",
-    },
-    {
-      id: "AUD-9911",
-      adminName: "Super Admin Root",
-      action: "Provisioned Global AI Credits",
-      tenantName: "LazyMonkey AI Flagship Group",
-      previousValue: "100,000 Tokens",
-      newValue: "200,000 Tokens",
-      ipAddress: "103.21.244.18",
-      timestamp: "Today · 19:15",
-      severity: "info",
-    },
-    {
-      id: "AUD-9910",
-      adminName: "DevOps Security",
-      action: "Rotated Razorpay Webhook Secret",
-      tenantName: "Platform Level (All Tenants)",
-      previousValue: "sec_live_***92a",
-      newValue: "sec_live_***88c",
-      ipAddress: "172.68.22.91",
-      timestamp: "Today · 14:02",
-      severity: "critical",
-    },
-  ]);
+  const [auditLogs] = useState<AuditLogItem[]>([]);
 
   // 5. FEATURE FLAGS
   const [featureFlags, setFeatureFlags] = useState([
@@ -415,12 +357,12 @@ export function SuperAdminView() {
 
   // 6. INTEGRATIONS LIST
   const [integrations, setIntegrations] = useState<IntegrationGateway[]>([
-    { id: "int_01", name: "Razorpay Multi-Account Gateway", category: "Payment", iconName: "CreditCard", status: "Connected", description: "Indian UPI, Cards & Netbanking auto-routing with webhook verification.", environment: "Production", lastPing: "2 mins ago", keyMasked: "rzp_live_***8942a" },
-    { id: "int_02", name: "Stripe Global Connect", category: "Payment", iconName: "CreditCard", status: "Connected", description: "Multi-currency processing for Dubai, London, and US branches.", environment: "Production", lastPing: "1 min ago", keyMasked: "pk_live_***4491b" },
-    { id: "int_03", name: "Twilio WhatsApp Business Cloud", category: "Messaging", iconName: "MessageSquare", status: "Connected", description: "Automated interactive appointment confirmations & digital receipts.", environment: "Production", lastPing: "4 mins ago", keyMasked: "AC_live_***9921c" },
-    { id: "int_04", name: "Resend Transactional Email", category: "Messaging", iconName: "Mail", status: "Connected", description: "High-deliverability SMTP & API for invoices, OTPs, and notifications.", environment: "Production", lastPing: "10 mins ago", keyMasked: "re_***7712d" },
-    { id: "int_05", name: "Google Gemini 3.7 Pro & Vision API", category: "AI & LLM", iconName: "Sparkles", status: "Connected", description: "Core LLM backend for hairstyle rendering, marketing copilot, and analytics.", environment: "Production", lastPing: "30 secs ago", keyMasked: "AIzaSy***6632e" },
-    { id: "int_06", name: "Google Calendar & Maps Sync", category: "Calendar & Maps", iconName: "Calendar", status: "Configured", description: "Real-time client calendar invites and salon GPS coordinates routing.", environment: "Production", lastPing: "15 mins ago", keyMasked: "gcal_***3319f" },
+    { id: "int_01", name: "Razorpay Multi-Account Gateway", category: "Payment", iconName: "CreditCard", status: "Connected", description: "Indian UPI, Cards & Netbanking auto-routing with webhook verification.", environment: "Production", lastPing: "Active", keyMasked: "rzp_live_***" },
+    { id: "int_02", name: "Stripe Global Connect", category: "Payment", iconName: "CreditCard", status: "Connected", description: "Multi-currency processing for international branches.", environment: "Production", lastPing: "Active", keyMasked: "pk_live_***" },
+    { id: "int_03", name: "Twilio WhatsApp Business Cloud", category: "Messaging", iconName: "MessageSquare", status: "Connected", description: "Automated interactive appointment confirmations & digital receipts.", environment: "Production", lastPing: "Active", keyMasked: "AC_live_***" },
+    { id: "int_04", name: "Resend Transactional Email", category: "Messaging", iconName: "Mail", status: "Connected", description: "High-deliverability SMTP & API for invoices, OTPs, and notifications.", environment: "Production", lastPing: "Active", keyMasked: "re_***" },
+    { id: "int_05", name: "Google Gemini 3.7 Pro & Vision API", category: "AI & LLM", iconName: "Sparkles", status: "Connected", description: "Core LLM backend for hairstyle rendering, marketing copilot, and analytics.", environment: "Production", lastPing: "Active", keyMasked: "AIzaSy***" },
+    { id: "int_06", name: "Google Calendar & Maps Sync", category: "Calendar & Maps", iconName: "Calendar", status: "Configured", description: "Real-time client calendar invites and salon GPS coordinates routing.", environment: "Production", lastPing: "Active", keyMasked: "gcal_***" },
   ]);
 
   // Aggregated Stats
@@ -443,37 +385,136 @@ export function SuperAdminView() {
     };
   }, [tenants]);
 
-  // Handler for adding a tenant
-  const handleAddTenant = (e: React.FormEvent) => {
+  const [showAddTenantModal, setShowAddTenantModal] = useState(false);
+  const [provisionedCreds, setProvisionedCreds] = useState<{
+    org: string; owner: string; email: string; username: string; password: string; phone?: string;
+  } | null>(null);
+  const [isProvisioning, setIsProvisioning] = useState(false);
+  const [provisionError, setProvisionError] = useState<string | null>(null);
+
+  // Handler for adding a tenant — calls real backend
+  const handleAddTenant = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newOwnerName.trim() || !newBrandName.trim()) return;
+    setProvisionError(null);
+    setIsProvisioning(true);
+    try {
+      const result = await OnboardingService.provisionOwner({
+        brand_name: newBrandName.trim(),
+        owner_name: newOwnerName.trim(),
+        owner_email: newOwnerEmail.trim() || undefined,
+        owner_phone: newOwnerPhone.trim() || undefined,
+        owner_password: newOwnerPassword.trim() || undefined,
+        city: newOwnerCity.trim() || undefined,
+        business_type: "general",
+        subscription_tier: newOwnerPlan,
+        currency: "INR",
+      });
 
-    const newTenant: TenantOwner = {
-      id: `org_0${tenants.length + 1}`,
-      name: newOwnerName,
-      brandName: newBrandName,
-      email: newOwnerEmail || `contact@${newBrandName.toLowerCase().replace(/\s+/g, "")}.com`,
-      phone: newOwnerPhone || "+91 98000 00000",
-      plan: newOwnerPlan,
-      status: "Active",
-      branchesCount: 1,
-      staffCount: 8,
-      customersCount: 150,
-      bookingsCount: 45,
-      mrr: newOwnerPlan === "Enterprise" ? 79999 : newOwnerPlan === "Business" ? 29999 : 14999,
-      joinedDate: "Today",
-      renewalDate: "07 Oct 2026",
-      city: newOwnerCity,
-      country: "India",
-      aiCreditsUsed: 0,
-      aiCreditsLimit: newOwnerPlan === "Enterprise" ? 200000 : 50000,
+      // Add to local tenants list
+      const matchedPlan = subscriptionPlans.find((p) => p.name === newOwnerPlan || p.code === newOwnerPlan);
+      const newTenant: TenantOwner = {
+        id: result.organization_id,
+        name: result.owner_name,
+        brandName: result.organization_name,
+        email: result.owner_email,
+        phone: result.phone || newOwnerPhone,
+        plan: newOwnerPlan,
+        status: "Active",
+        branchesCount: 0,
+        staffCount: 0,
+        customersCount: 0,
+        bookingsCount: 0,
+        mrr: matchedPlan ? matchedPlan.price_monthly : 0,
+        joinedDate: new Date().toISOString().split("T")[0],
+        renewalDate: "",
+        city: newOwnerCity,
+        country: "India",
+        aiCreditsUsed: 0,
+        aiCreditsLimit: matchedPlan ? matchedPlan.ai_credits_limit : 0,
+      };
+      setTenants((prev) => [newTenant, ...prev]);
+
+      // Show credentials popup
+      setProvisionedCreds({
+        org: result.organization_name,
+        owner: result.owner_name,
+        email: result.owner_email,
+        username: result.username,
+        password: result.temp_password,
+        phone: result.phone,
+      });
+
+      setNewOwnerName("");
+      setNewBrandName("");
+      setNewOwnerEmail("");
+      setNewOwnerPhone("");
+      setNewOwnerCity("");
+      setNewOwnerPassword("");
+      setShowOwnerPassword(false);
+      setShowAddTenantModal(false);
+      addToast("success", "Owner Provisioned", `${result.organization_name} is now live in the database.`);
+    } catch (err: any) {
+      const msg = err?.message || "Failed to provision owner. Please try again.";
+      setProvisionError(msg);
+    } finally {
+      setIsProvisioning(false);
+    }
+  };
+
+  // Handlers for Plan CRUD stored in database
+  const handleSavePlan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!planForm.name.trim()) return;
+
+    const payload = {
+      name: planForm.name.trim(),
+      code: planForm.code.trim() || planForm.name.toLowerCase().replace(/\s+/g, "_"),
+      description: planForm.description.trim(),
+      price_monthly: Number(planForm.price_monthly) || 0,
+      price_yearly: Number(planForm.price_yearly) || Number(planForm.price_monthly) * 10,
+      currency: planForm.currency || "INR",
+      branches_limit: Number(planForm.branches_limit) || 1,
+      staff_limit: Number(planForm.staff_limit) || 5,
+      ai_credits_limit: Number(planForm.ai_credits_limit) || 1000,
+      features: typeof planForm.features === "string" 
+        ? (planForm.features as string).split(",").map((s: string) => s.trim()).filter(Boolean)
+        : planForm.features,
+      is_popular: Boolean(planForm.is_popular),
+      is_active: Boolean(planForm.is_active),
+      color: planForm.color || "border-slate-200 bg-white",
     };
 
-    setTenants((prev) => [newTenant, ...prev]);
-    addToast("success", "Tenant Organization Provisioned", `${newTenant.brandName} is now live on LazyMonkey AI Platform.`);
-    setNewOwnerName("");
-    setNewBrandName("");
-    setShowAddTenantModal(false);
+    try {
+      if (editingPlan) {
+        const updated = await SubscriptionPlanService.updatePlan(editingPlan.id, payload);
+        setSubscriptionPlans((prev) => prev.map((p) => (p.id === editingPlan.id ? updated : p)));
+        addToast("success", "Plan Updated", `Tier '${payload.name}' saved to database.`);
+      } else {
+        const created = await SubscriptionPlanService.createPlan(payload);
+        setSubscriptionPlans((prev) => [...prev, created]);
+        addToast("success", "Plan Created", `Tier '${payload.name}' created in database.`);
+      }
+      setShowPlanModal(false);
+      setEditingPlan(null);
+    } catch (err: any) {
+      console.error("Failed to save plan:", err);
+      addToast("error", "Failed", err?.message || "Could not save subscription tier.");
+    }
+  };
+
+  const handleDeletePlan = async (planId: string, planName: string) => {
+    if (!window.confirm(`Are you sure you want to delete '${planName}' tier?`)) return;
+    try {
+      await SubscriptionPlanService.deletePlan(planId);
+      setSubscriptionPlans((prev) => prev.filter((p) => p.id !== planId));
+      addToast("success", "Plan Deleted", `Tier '${planName}' removed from database.`);
+      setShowPlanModal(false);
+      setEditingPlan(null);
+    } catch (err: any) {
+      console.error("Failed to delete plan:", err);
+      addToast("error", "Error", err?.message || "Could not delete plan.");
+    }
   };
 
   // Handler for ticket reply
@@ -492,10 +533,10 @@ export function SuperAdminView() {
       prev.map((t) =>
         t.id === selectedTicket.id
           ? {
-              ...t,
-              status: "In Progress",
-              messages: [...t.messages, newMsg],
-            }
+            ...t,
+            status: "In Progress",
+            messages: [...t.messages, newMsg],
+          }
           : t
       )
     );
@@ -503,10 +544,10 @@ export function SuperAdminView() {
     setSelectedTicket((prev) =>
       prev
         ? {
-            ...prev,
-            status: "In Progress",
-            messages: [...prev.messages, newMsg],
-          }
+          ...prev,
+          status: "In Progress",
+          messages: [...prev.messages, newMsg],
+        }
         : null
     );
 
@@ -554,12 +595,16 @@ export function SuperAdminView() {
           gradient: "from-slate-950 via-emerald-950 to-slate-900",
           description: "Subscription tiers (Starter to Enterprise), recurring billing cycles, gateway revenue, and tax compliance.",
           actionText: "+ Create Custom Plan",
-          onAction: () => addToast("info", "Plan Config", "Opening subscription tier configurator."),
+          onAction: () => {
+            setEditingPlan(null);
+            setPlanForm(emptyPlanForm);
+            setShowPlanModal(true);
+          },
           metrics: [
             { label: "Monthly MRR", value: `₹${(platformStats.totalMRR / 100000).toFixed(1)}L`, change: "+18.6% Growth", icon: <DollarSign className="w-3.5 h-3.5 text-emerald-400" /> },
             { label: "Projected ARR", value: `₹${((platformStats.totalMRR * 12) / 10000000).toFixed(2)}Cr`, change: "Annual Run-Rate", icon: <TrendingUp className="w-3.5 h-3.5 text-emerald-400" /> },
             { label: "Paid Subscriptions", value: `${platformStats.activeTenantsCount} Active`, change: "Zero Churn", icon: <CreditCard className="w-3.5 h-3.5 text-teal-400" /> },
-            { label: "Average ARPU", value: `₹${(platformStats.totalMRR / platformStats.activeTenantsCount).toFixed(0)}`, change: "Per Owner", icon: <BarChart3 className="w-3.5 h-3.5 text-sky-400" /> },
+            { label: "Average ARPU", value: `₹${platformStats.activeTenantsCount > 0 ? (platformStats.totalMRR / platformStats.activeTenantsCount).toFixed(0) : 0}`, change: "Per Owner", icon: <BarChart3 className="w-3.5 h-3.5 text-sky-400" /> },
             { label: "Gateway Health", value: "100%", change: "Razorpay & Stripe", icon: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> },
             { label: "Pending Invoices", value: "0 Due", change: "All Cleared", icon: <FileText className="w-3.5 h-3.5 text-purple-400" /> },
           ],
@@ -852,7 +897,7 @@ export function SuperAdminView() {
 
               <div className="space-y-3">
                 {[
-                  { name: "AP-South (Mumbai Primary)", ping: "14ms", status: "Healthy", load: "34%" },
+                  { name: "AP-South (  Primary)", ping: "14ms", status: "Healthy", load: "34%" },
                   { name: "EU-West (London Mayfair)", ping: "38ms", status: "Healthy", load: "28%" },
                   { name: "ME-Central (Dubai Marina)", ping: "22ms", status: "Healthy", load: "41%" },
                   { name: "US-West (Beverly Hills)", ping: "54ms", status: "Healthy", load: "19%" },
@@ -945,13 +990,12 @@ export function SuperAdminView() {
                         <td className="py-3.5 px-4 text-slate-700 font-medium">{t.name}</td>
                         <td className="py-3.5 px-4">
                           <span
-                            className={`font-bold px-2 py-0.5 rounded-md text-[10px] ${
-                              t.plan === "Enterprise"
+                            className={`font-bold px-2 py-0.5 rounded-md text-[10px] ${t.plan === "Enterprise"
                                 ? "bg-amber-100 text-amber-800 border border-amber-200"
                                 : t.plan === "Business"
                                   ? "bg-purple-100 text-purple-800 border border-purple-200"
                                   : "bg-sky-100 text-sky-800 border border-sky-200"
-                            }`}
+                              }`}
                           >
                             {t.plan}
                           </span>
@@ -1044,11 +1088,10 @@ export function SuperAdminView() {
                   <button
                     key={tab.id}
                     onClick={() => setOwnerDrillTab(tab.id as any)}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                      ownerDrillTab === tab.id
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${ownerDrillTab === tab.id
                         ? "bg-indigo-600 text-white shadow-xs"
                         : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                    }`}
+                      }`}
                   >
                     {tab.icon}
                     <span>{tab.label}</span>
@@ -1138,68 +1181,241 @@ export function SuperAdminView() {
             </div>
           ) : (
             <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <h3 className="font-bold text-base text-slate-900">Tenant Franchise Directory</h3>
-                  <p className="text-xs text-slate-500">Select any salon enterprise to inspect their complete multi-branch hierarchy.</p>
+                  <h3 className="font-bold text-base text-slate-900 flex items-center gap-2">
+                    <Building2 className="w-5 h-5 text-indigo-600" />
+                    <span>Onboarded Salon Organizations & Franchises ({tenants.length})</span>
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Live list of all onboarded customer salon organizations, owners, and license entitlements.
+                  </p>
                 </div>
-                <button
-                  onClick={() => setShowAddTenantModal(true)}
-                  className="px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs shadow-xs hover:bg-indigo-700 cursor-pointer"
-                >
-                  + Add New Owner
-                </button>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
+                    <button
+                      onClick={() => setOrgViewMode("table")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
+                        orgViewMode === "table" ? "bg-white text-indigo-700 shadow-xs" : "text-slate-500 hover:text-slate-800"
+                      }`}
+                    >
+                      <Layers className="w-3.5 h-3.5" />
+                      <span>Row View</span>
+                    </button>
+                    <button
+                      onClick={() => setOrgViewMode("cards")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
+                        orgViewMode === "cards" ? "bg-white text-indigo-700 shadow-xs" : "text-slate-500 hover:text-slate-800"
+                      }`}
+                    >
+                      <Building2 className="w-3.5 h-3.5" />
+                      <span>Grid Cards</span>
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => setShowAddTenantModal(true)}
+                    className="px-4 py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-xs shadow-xs hover:bg-indigo-700 cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Provision Tenant</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 pt-2">
-                {tenants.map((t) => (
-                  <div
-                    key={t.id}
-                    onClick={() => setSelectedOwner(t)}
-                    className="p-5 rounded-2xl bg-slate-50/70 border border-slate-200/80 hover:border-indigo-400 hover:bg-indigo-50/30 transition-all cursor-pointer space-y-4 group"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white font-bold flex items-center justify-center text-sm shadow-xs">
-                          {t.brandName.charAt(0)}
+              {/* Bulk action toolbar */}
+              {selectedOrgs.size > 0 && (
+                <div className="flex items-center justify-between bg-rose-50 border border-rose-200 rounded-2xl px-4 py-2.5 text-sm animate-in slide-in-from-top-1 duration-200">
+                  <span className="text-rose-700 font-semibold">
+                    {selectedOrgs.size} organisation{selectedOrgs.size > 1 ? "s" : ""} selected
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedOrgs(new Set())}
+                      className="text-slate-500 hover:text-slate-700 text-xs font-medium px-3 py-1 rounded-lg hover:bg-slate-100 transition cursor-pointer"
+                    >
+                      Deselect All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDeleteSelected}
+                      disabled={isDeletingOrgs}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {isDeletingOrgs ? (
+                        <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
+                      ) : (
+                        <Trash2 className="w-3.5 h-3.5" />
+                      )}
+                      {isDeletingOrgs ? "Deleting…" : `Delete ${selectedOrgs.size > 1 ? `(${selectedOrgs.size})` : ""}`}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {orgViewMode === "table" ? (
+                <div className="overflow-x-auto rounded-2xl border border-slate-100">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50/75">
+                      <tr className="border-b border-slate-200/80 text-slate-500 font-semibold uppercase tracking-wider text-[11px]">
+                        {/* Select-all checkbox */}
+                        <th className="py-3 px-4 w-10">
+                          <input
+                            type="checkbox"
+                            id="select-all-orgs"
+                            checked={tenants.length > 0 && selectedOrgs.size === tenants.length}
+                            ref={(el) => {
+                              if (el) el.indeterminate = selectedOrgs.size > 0 && selectedOrgs.size < tenants.length;
+                            }}
+                            onChange={toggleSelectAll}
+                            className="w-4 h-4 rounded border-slate-300 text-indigo-600 accent-indigo-600 cursor-pointer"
+                          />
+                        </th>
+                        <th className="py-3 px-4">Salon Organization</th>
+                        <th className="py-3 px-4">Managing Owner</th>
+                        <th className="py-3 px-4">Contact Info</th>
+                        <th className="py-3 px-4">Plan Tier</th>
+                        <th className="py-3 px-4">Locations</th>
+                        <th className="py-3 px-4">Staff</th>
+                        <th className="py-3 px-4">MRR</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {tenants.map((t) => (
+                        <tr
+                          key={t.id}
+                          onClick={() => {
+                            setSelectedOwner(t);
+                          }}
+                          className={`hover:bg-indigo-50/40 cursor-pointer transition-colors group ${
+                            selectedOrgs.has(t.id) ? "bg-rose-50/60" : ""
+                          }`}
+                        >
+                          {/* Row checkbox */}
+                          <td className="py-3.5 px-4" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={selectedOrgs.has(t.id)}
+                              onChange={() => {}}
+                              onClick={(e) => toggleOrgSelection(t.id, e)}
+                              className="w-4 h-4 rounded border-slate-300 text-rose-600 accent-rose-600 cursor-pointer"
+                            />
+                          </td>
+                          <td className="py-3.5 px-4 font-bold text-slate-900 flex items-center gap-2.5">
+                            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white flex items-center justify-center font-bold text-xs shadow-xs shrink-0">
+                              {t.brandName.charAt(0)}
+                            </div>
+                            <div>
+                              <div className="text-slate-900 font-bold group-hover:text-indigo-600 transition-colors">
+                                {t.brandName}
+                              </div>
+                              <div className="text-[10px] text-slate-400 font-normal">
+                                {t.city}, {t.country}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4 font-medium text-slate-800">
+                            {t.name}
+                          </td>
+                          <td className="py-3.5 px-4 text-slate-600 space-y-0.5">
+                            <div className="text-slate-700">{t.email}</div>
+                            <div className="text-[10px] text-slate-400 font-mono">{t.phone}</div>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <span
+                              className={`font-bold px-2 py-0.5 rounded-md text-[10px] ${
+                                t.plan === "Enterprise"
+                                  ? "bg-amber-100 text-amber-800 border border-amber-200"
+                                  : t.plan === "Business"
+                                  ? "bg-purple-100 text-purple-800 border border-purple-200"
+                                  : "bg-sky-100 text-sky-800 border border-sky-200"
+                              }`}
+                            >
+                              {t.plan}
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 font-semibold text-slate-800">
+                            {t.branchesCount} Ateliers
+                          </td>
+                          <td className="py-3.5 px-4 text-slate-600">
+                            {t.staffCount} Stylists
+                          </td>
+                          <td className="py-3.5 px-4 font-bold text-emerald-700">
+                            ₹{t.mrr.toLocaleString()}
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                              <CheckCircle2 className="w-3 h-3" />
+                              <span>{t.status}</span>
+                            </span>
+                          </td>
+                          <td className="py-3.5 px-4 text-right">
+                            <button
+                              type="button"
+                              className="text-indigo-600 group-hover:text-indigo-800 font-bold text-xs inline-flex items-center gap-1 cursor-pointer bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-lg transition"
+                            >
+                              <span>Inspect</span>
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 pt-2">
+                  {tenants.map((t) => (
+                    <div
+                      key={t.id}
+                      onClick={() => setSelectedOwner(t)}
+                      className="p-5 rounded-2xl bg-slate-50/70 border border-slate-200/80 hover:border-indigo-400 hover:bg-indigo-50/30 transition-all cursor-pointer space-y-4 group"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white font-bold flex items-center justify-center text-sm shadow-xs">
+                            {t.brandName.charAt(0)}
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-sm text-slate-900 group-hover:text-indigo-700 transition-colors">
+                              {t.brandName}
+                            </h4>
+                            <div className="text-[10px] text-slate-400">{t.city}, {t.country}</div>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800">
+                          {t.plan}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 py-2 border-y border-slate-200/60 text-center text-xs">
+                        <div>
+                          <div className="text-[10px] text-slate-400">Branches</div>
+                          <div className="font-bold text-slate-800">{t.branchesCount}</div>
                         </div>
                         <div>
-                          <h4 className="font-bold text-sm text-slate-900 group-hover:text-indigo-700 transition-colors">
-                            {t.brandName}
-                          </h4>
-                          <div className="text-[10px] text-slate-400">{t.city}, {t.country}</div>
+                          <div className="text-[10px] text-slate-400">Staff</div>
+                          <div className="font-bold text-slate-800">{t.staffCount}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] text-slate-400">Monthly MRR</div>
+                          <div className="font-bold text-emerald-700">₹{(t.mrr / 1000).toFixed(0)}k</div>
                         </div>
                       </div>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800">
-                        {t.plan}
-                      </span>
-                    </div>
 
-                    <div className="grid grid-cols-3 gap-2 py-2 border-y border-slate-200/60 text-center text-xs">
-                      <div>
-                        <div className="text-[10px] text-slate-400">Branches</div>
-                        <div className="font-bold text-slate-800">{t.branchesCount}</div>
-                      </div>
-                      <div>
-                        <div className="text-[10px] text-slate-400">Staff</div>
-                        <div className="font-bold text-slate-800">{t.staffCount}</div>
-                      </div>
-                      <div>
-                        <div className="text-[10px] text-slate-400">Monthly MRR</div>
-                        <div className="font-bold text-emerald-700">₹{(t.mrr / 1000).toFixed(0)}k</div>
+                      <div className="flex items-center justify-between text-xs text-indigo-600 font-bold group-hover:text-indigo-800">
+                        <span>Owner: {t.name}</span>
+                        <span className="flex items-center gap-1">
+                          <span>Inspect</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </span>
                       </div>
                     </div>
-
-                    <div className="flex items-center justify-between text-xs text-indigo-600 font-bold group-hover:text-indigo-800">
-                      <span>Owner: {t.name}</span>
-                      <span className="flex items-center gap-1">
-                        <span>Inspect</span>
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1210,40 +1426,89 @@ export function SuperAdminView() {
         <div className="space-y-6">
           {/* SaaS Pricing Plans Configurator */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {[
-              { name: "Starter", price: "₹4,999", period: "/mo", branches: 1, staff: 5, ai: "5k credits", color: "border-slate-200 bg-white" },
-              { name: "Professional", price: "₹14,999", period: "/mo", branches: 2, staff: 15, ai: "20k credits", color: "border-sky-200 bg-sky-50/30" },
-              { name: "Business", price: "₹29,999", period: "/mo", branches: 5, staff: 50, ai: "50k credits", color: "border-purple-300 bg-purple-50/40", popular: true },
-              { name: "Enterprise", price: "₹79,999", period: "/mo", branches: "Unlimited", staff: "Unlimited", ai: "200k credits", color: "border-amber-300 bg-amber-50/40" },
-            ].map((plan, i) => (
-              <div key={i} className={`p-6 rounded-3xl border shadow-xs space-y-4 ${plan.color} relative`}>
-                {plan.popular && (
-                  <span className="absolute -top-3 right-6 bg-purple-600 text-white text-[10px] uppercase font-bold px-3 py-0.5 rounded-full shadow-xs">
-                    Most Popular
-                  </span>
-                )}
-                <div>
-                  <h4 className="text-base font-bold text-slate-900">{plan.name} Tier</h4>
-                  <div className="text-2xl font-extrabold text-slate-900 mt-1">
-                    {plan.price}<span className="text-xs font-normal text-slate-500">{plan.period}</span>
-                  </div>
-                </div>
-
-                <div className="space-y-2 text-xs text-slate-600 border-t border-slate-200 pt-3">
-                  <div className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600" /><span><strong>{plan.branches}</strong> Branch License</span></div>
-                  <div className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600" /><span><strong>{plan.staff}</strong> Staff Accounts</span></div>
-                  <div className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600" /><span><strong>{plan.ai}</strong> for AI Hairstyle & POS</span></div>
-                  <div className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-600" /><span>WhatsApp & SMS Gateway</span></div>
-                </div>
-
+            {isLoadingPlans ? (
+              <div className="col-span-full py-12 text-center text-slate-400">
+                <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                <span>Loading subscription tiers from database...</span>
+              </div>
+            ) : subscriptionPlans.length === 0 ? (
+              <div className="col-span-full py-12 text-center bg-white rounded-3xl border border-dashed border-slate-200 p-8 space-y-3">
+                <CreditCard className="w-10 h-10 text-slate-300 mx-auto" />
+                <p className="font-bold text-slate-700">No subscription tiers configured yet</p>
                 <button
-                  onClick={() => addToast("info", "Plan Config", `Editing limits for ${plan.name} tier.`)}
-                  className="w-full py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition-colors cursor-pointer"
+                  onClick={() => {
+                    setEditingPlan(null);
+                    setPlanForm(emptyPlanForm);
+                    setShowPlanModal(true);
+                  }}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition cursor-pointer"
                 >
-                  Configure Tier Limits
+                  + Create First Subscription Tier
                 </button>
               </div>
-            ))}
+            ) : (
+              subscriptionPlans.map((plan) => (
+                <div key={plan.id} className={`p-6 rounded-3xl border shadow-xs space-y-4 ${plan.color || "border-slate-200 bg-white"} relative`}>
+                  {plan.is_popular && (
+                    <span className="absolute -top-3 right-6 bg-purple-600 text-white text-[10px] uppercase font-bold px-3 py-0.5 rounded-full shadow-xs">
+                      Most Popular
+                    </span>
+                  )}
+                  <div>
+                    <h4 className="text-base font-bold text-slate-900">{plan.name} Tier</h4>
+                    <div className="text-2xl font-extrabold text-slate-900 mt-1">
+                      ₹{plan.price_monthly.toLocaleString()}<span className="text-xs font-normal text-slate-500">/mo</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 text-xs text-slate-600 border-t border-slate-200 pt-3">
+                    <div className="flex items-center gap-2">
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span><strong>{plan.branches_limit >= 900 ? "Unlimited" : plan.branches_limit}</strong> Branch License</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span><strong>{plan.staff_limit >= 900 ? "Unlimited" : plan.staff_limit}</strong> Staff Accounts</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span><strong>{(plan.ai_credits_limit / 1000).toFixed(0)}k credits</strong> AI Limit</span>
+                    </div>
+                    {(plan.features || []).slice(0, 2).map((feat, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>{feat}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setEditingPlan(plan);
+                      setPlanForm({
+                        name: plan.name,
+                        code: plan.code,
+                        description: plan.description || "",
+                        price_monthly: plan.price_monthly,
+                        price_yearly: plan.price_yearly || plan.price_monthly * 10,
+                        currency: plan.currency || "INR",
+                        branches_limit: plan.branches_limit,
+                        staff_limit: plan.staff_limit,
+                        ai_credits_limit: plan.ai_credits_limit,
+                        features: Array.isArray(plan.features) ? plan.features.join(", ") : (plan.features || ""),
+                        is_popular: plan.is_popular,
+                        is_active: plan.is_active,
+                        color: plan.color || "border-slate-200 bg-white",
+                      });
+                      setShowPlanModal(true);
+                    }}
+                    className="w-full py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition-colors cursor-pointer"
+                  >
+                    Configure Tier Limits
+                  </button>
+                </div>
+              ))
+            )}
           </div>
 
           {/* Subscriptions Table */}
@@ -1310,7 +1575,7 @@ export function SuperAdminView() {
                   <BarChart
                     data={[
                       { city: "Hyderabad", gmv: 84 },
-                      { city: "Mumbai", gmv: 62 },
+                      { city: " ", gmv: 62 },
                       { city: "London", gmv: 48 },
                       { city: "Dubai", gmv: 34 },
                       { city: "Bengaluru", gmv: 20 },
@@ -1332,22 +1597,34 @@ export function SuperAdminView() {
                 <span>Tenant Tier Distribution</span>
               </h3>
               <div className="space-y-3 pt-2">
-                {[
-                  { tier: "Enterprise Unlimited (₹79,999/mo)", count: 2, pct: "40%", color: "bg-amber-500" },
-                  { tier: "Business Standard (₹29,999/mo)", count: 2, pct: "40%", color: "bg-purple-500" },
-                  { tier: "Professional Growth (₹14,999/mo)", count: 1, pct: "20%", color: "bg-sky-500" },
-                  { tier: "Starter Franchise (₹4,999/mo)", count: 0, pct: "0%", color: "bg-slate-400" },
-                ].map((item, i) => (
-                  <div key={i} className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 space-y-1.5 text-xs">
-                    <div className="flex justify-between font-bold text-slate-800">
-                      <span>{item.tier}</span>
-                      <span>{item.count} Tenants ({item.pct})</span>
-                    </div>
-                    <div className="w-full bg-slate-200 rounded-full h-2">
-                      <div className={`${item.color} h-2 rounded-full`} style={{ width: item.pct }} />
-                    </div>
-                  </div>
-                ))}
+                {tenants.length === 0 ? (
+                  <p className="text-slate-400 text-xs py-4 text-center">No active tenant data available yet.</p>
+                ) : (
+                  (() => {
+                    const counts: Record<string, number> = {};
+                    tenants.forEach((t) => {
+                      const key = t.plan || "Unassigned";
+                      counts[key] = (counts[key] || 0) + 1;
+                    });
+                    const colorMap = ["bg-indigo-500", "bg-purple-500", "bg-sky-500", "bg-emerald-500", "bg-amber-500"];
+                    return Object.entries(counts).map(([tierName, count], i) => {
+                      const pctNum = Math.round((count / tenants.length) * 100);
+                      const planObj = subscriptionPlans.find((p) => p.name === tierName);
+                      const priceText = planObj ? ` (₹${planObj.price_monthly.toLocaleString()}/mo)` : "";
+                      return (
+                        <div key={i} className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 space-y-1.5 text-xs">
+                          <div className="flex justify-between font-bold text-slate-800">
+                            <span>{tierName}{priceText}</span>
+                            <span>{count} {count === 1 ? "Tenant" : "Tenants"} ({pctNum}%)</span>
+                          </div>
+                          <div className="w-full bg-slate-200 rounded-full h-2">
+                            <div className={`${colorMap[i % colorMap.length]} h-2 rounded-full`} style={{ width: `${pctNum}%` }} />
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()
+                )}
               </div>
             </div>
           </div>
@@ -1512,21 +1789,19 @@ export function SuperAdminView() {
                 <div
                   key={ticket.id}
                   onClick={() => setSelectedTicket(ticket)}
-                  className={`p-4 rounded-2xl border transition-all cursor-pointer space-y-2 ${
-                    selectedTicket?.id === ticket.id
+                  className={`p-4 rounded-2xl border transition-all cursor-pointer space-y-2 ${selectedTicket?.id === ticket.id
                       ? "border-rose-500 bg-rose-50/40 shadow-xs"
                       : "border-slate-200/80 bg-slate-50/50 hover:bg-slate-100/60"
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-mono font-bold text-xs text-rose-700">{ticket.id}</span>
                     <div className="flex items-center gap-2">
                       <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          ticket.priority === "Urgent"
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${ticket.priority === "Urgent"
                             ? "bg-rose-100 text-rose-800"
                             : "bg-amber-100 text-amber-800"
-                        }`}
+                          }`}
                       >
                         {ticket.priority} Priority
                       </span>
@@ -1564,13 +1839,12 @@ export function SuperAdminView() {
                   {selectedTicket.messages.map((m) => (
                     <div
                       key={m.id}
-                      className={`p-3 rounded-2xl space-y-1 ${
-                        m.role === "superadmin"
+                      className={`p-3 rounded-2xl space-y-1 ${m.role === "superadmin"
                           ? "bg-purple-600 text-white ml-6"
                           : m.role === "system"
                             ? "bg-slate-100 text-slate-600 italic"
                             : "bg-slate-100 text-slate-800 mr-6"
-                      }`}
+                        }`}
                     >
                       <div className="flex justify-between items-center text-[10px] opacity-80">
                         <strong>{m.sender}</strong>
@@ -1638,11 +1912,10 @@ export function SuperAdminView() {
                 <button
                   key={sub.id}
                   onClick={() => setSystemSubTab(sub.id as any)}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                    systemSubTab === sub.id
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${systemSubTab === sub.id
                       ? "bg-slate-900 text-white shadow-xs"
                       : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                  }`}
+                    }`}
                 >
                   {sub.icon}
                   <span>{sub.label}</span>
@@ -1774,11 +2047,10 @@ export function SuperAdminView() {
                         setAdminProfile({ ...adminProfile, twoFactorEnabled: !adminProfile.twoFactorEnabled });
                         addToast("info", "2FA Setting Updated", "Two-factor state updated.");
                       }}
-                      className={`px-3 py-1 rounded-full font-bold text-xs cursor-pointer ${
-                        adminProfile.twoFactorEnabled
+                      className={`px-3 py-1 rounded-full font-bold text-xs cursor-pointer ${adminProfile.twoFactorEnabled
                           ? "bg-emerald-100 text-emerald-800"
                           : "bg-slate-200 text-slate-700"
-                      }`}
+                        }`}
                     >
                       {adminProfile.twoFactorEnabled ? "Active" : "Disabled"}
                     </button>
@@ -1829,13 +2101,12 @@ export function SuperAdminView() {
                         <td className="py-3.5 px-4 font-mono text-slate-400">{log.ipAddress}</td>
                         <td className="py-3.5 px-4 text-right">
                           <span
-                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                              log.severity === "critical"
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${log.severity === "critical"
                                 ? "bg-rose-100 text-rose-800"
                                 : log.severity === "warning"
                                   ? "bg-amber-100 text-amber-800"
                                   : "bg-sky-100 text-sky-800"
-                            }`}
+                              }`}
                           >
                             {log.severity}
                           </span>
@@ -1871,13 +2142,12 @@ export function SuperAdminView() {
 
                     <div className="flex items-center gap-3">
                       <span
-                        className={`text-xs font-bold px-3 py-1 rounded-full ${
-                          flag.status === "ON"
+                        className={`text-xs font-bold px-3 py-1 rounded-full ${flag.status === "ON"
                             ? "bg-emerald-100 text-emerald-800"
                             : flag.status === "BETA"
                               ? "bg-amber-100 text-amber-800"
                               : "bg-slate-200 text-slate-600"
-                        }`}
+                          }`}
                       >
                         {flag.status}
                       </span>
@@ -1911,7 +2181,7 @@ export function SuperAdminView() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {[
-                  { region: "AP-South-1 (Mumbai Primary)", instances: "8 Kubernetes Pods", load: "34%", ping: "14ms", status: "Healthy" },
+                  { region: "AP-South-1 (  Primary)", instances: "8 Kubernetes Pods", load: "34%", ping: "14ms", status: "Healthy" },
                   { region: "EU-West-2 (London Mayfair)", instances: "4 Kubernetes Pods", load: "28%", ping: "38ms", status: "Healthy" },
                   { region: "ME-Central-1 (Dubai Marina)", instances: "4 Kubernetes Pods", load: "41%", ping: "22ms", status: "Healthy" },
                   { region: "US-West-1 (Beverly Hills)", instances: "2 Kubernetes Pods", load: "19%", ping: "54ms", status: "Healthy" },
@@ -1963,7 +2233,7 @@ export function SuperAdminView() {
                 <input
                   type="text"
                   required
-                  placeholder="e.g., Beverly Hills Haute Aesthetics"
+                  placeholder="e.g., Grand Salon Group"
                   value={newBrandName}
                   onChange={(e) => setNewBrandName(e.target.value)}
                   className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -2010,7 +2280,7 @@ export function SuperAdminView() {
                   <label className="font-bold text-slate-700">Headquarters City</label>
                   <input
                     type="text"
-                    placeholder="Mumbai / Dubai / London"
+                    placeholder="  / Dubai / London"
                     value={newOwnerCity}
                     onChange={(e) => setNewOwnerCity(e.target.value)}
                     className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -2020,31 +2290,329 @@ export function SuperAdminView() {
                   <label className="font-bold text-slate-700">Subscription Tier</label>
                   <select
                     value={newOwnerPlan}
-                    onChange={(e) => setNewOwnerPlan(e.target.value as any)}
+                    onChange={(e) => setNewOwnerPlan(e.target.value)}
                     className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-bold"
                   >
-                    <option value="Starter">Starter (₹4,999/mo)</option>
-                    <option value="Professional">Professional (₹14,999/mo)</option>
-                    <option value="Business">Business (₹29,999/mo)</option>
-                    <option value="Enterprise">Enterprise (₹79,999/mo)</option>
+                    {subscriptionPlans.length > 0 ? (
+                      subscriptionPlans.map((p) => (
+                        <option key={p.id} value={p.name}>
+                          {p.name} (₹{p.price_monthly.toLocaleString()}/mo)
+                        </option>
+                      ))
+                    ) : (
+                      <option value="Starter">Starter Plan</option>
+                    )}
                   </select>
                 </div>
               </div>
 
+              {/* Set Owner Password */}
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 flex items-center gap-1">
+                  <Lock className="w-3.5 h-3.5 text-indigo-500" />
+                  Set Owner Password *
+                </label>
+                <div className="relative">
+                  <input
+                    type={showOwnerPassword ? "text" : "password"}
+                    required
+                    placeholder="Min 6 characters"
+                    value={newOwnerPassword}
+                    onChange={(e) => setNewOwnerPassword(e.target.value)}
+                    autoComplete="new-password"
+                    className="w-full p-3 pr-10 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowOwnerPassword(!showOwnerPassword)}
+                    className="absolute right-3 top-3.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    {showOwnerPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-400">This password will be stored as a bcrypt hash. Share it securely with the owner.</p>
+              </div>
+              {provisionError && (
+                <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+                  <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+                  <span className="text-xs text-red-600">{provisionError}</span>
+                </div>
+              )}
+
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setShowAddTenantModal(false)}
-                  className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition-colors cursor-pointer"
+                  onClick={() => { setShowAddTenantModal(false); setProvisionError(null); }}
+                  className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition-colors cursor-pointer text-xs"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold shadow-md transition-all cursor-pointer"
+                  disabled={isProvisioning}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold shadow-md transition-all cursor-pointer text-xs disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  Provision & Launch License
+                  {isProvisioning ? (
+                    <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />Provisioning...</>
+                  ) : "Provision & Launch License"}
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* ===================================================================== */}
+      {/* PROVISIONED CREDENTIALS MODAL */}
+      {/* ===================================================================== */}
+      {provisionedCreds && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-200 space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="font-bold text-base text-slate-900 flex items-center gap-2">
+                <Key className="w-5 h-5 text-emerald-600" />
+                Owner Credentials Created
+              </h3>
+              <button
+                onClick={() => setProvisionedCreds(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 space-y-1 text-xs">
+              <p className="text-emerald-700 font-bold text-sm mb-2">✅ Saved to database with bcrypt hash</p>
+              <div className="space-y-2 font-mono">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500">Organization</span>
+                  <span className="font-bold text-slate-800">{provisionedCreds.org}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500">Owner Name</span>
+                  <span className="font-bold text-slate-800">{provisionedCreds.owner}</span>
+                </div>
+                <div className="flex justify-between items-center border-t border-emerald-200 pt-2 mt-2">
+                  <span className="text-slate-500">Login Email</span>
+                  <span className="font-bold text-indigo-700">{provisionedCreds.email}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500">Username</span>
+                  <span className="font-bold text-indigo-700">{provisionedCreds.username}</span>
+                </div>
+                <div className="flex justify-between items-center bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                  <span className="text-slate-500">Temp Password</span>
+                  <span className="font-bold text-amber-700 text-sm tracking-widest">{provisionedCreds.password}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-[11px] text-amber-700">
+              ⚠️ Share these credentials securely with the owner. The password is stored as a bcrypt hash — this is the only time it's shown in plain text.
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  const text = `Salon OS Login Credentials\nOrganization: ${provisionedCreds.org}\nOwner: ${provisionedCreds.owner}\nEmail: ${provisionedCreds.email}\nUsername: ${provisionedCreds.username}\nPassword: ${provisionedCreds.password}\n\nLogin at: ${window.location.origin}`;
+                  navigator.clipboard.writeText(text);
+                  addToast("success", "Copied!", "Credentials copied to clipboard.");
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Mail className="w-3.5 h-3.5" />
+                Copy Credentials
+              </button>
+              <button
+                onClick={() => setProvisionedCreds(null)}
+                className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* 4. SUBSCRIPTION PLAN CONFIGURATOR / CREATION MODAL */}
+      {/* ===================================================================== */}
+      {showPlanModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl border border-slate-200 space-y-5 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <h3 className="font-bold text-lg text-slate-900 flex items-center gap-2">
+                <CreditCard className="w-5 h-5 text-indigo-600" />
+                <span>{editingPlan ? `Edit ${editingPlan.name} Tier` : "Create New Subscription Tier"}</span>
+              </h3>
+              <button
+                onClick={() => { setShowPlanModal(false); setEditingPlan(null); }}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSavePlan} className="space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700">Tier Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g., Enterprise Plus"
+                    value={planForm.name}
+                    onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })}
+                    className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700">Internal Code</label>
+                  <input
+                    type="text"
+                    placeholder="e.g., enterprise_plus"
+                    value={planForm.code}
+                    onChange={(e) => setPlanForm({ ...planForm, code: e.target.value })}
+                    className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">Description</label>
+                <input
+                  type="text"
+                  placeholder="Target audience and plan positioning summary"
+                  value={planForm.description}
+                  onChange={(e) => setPlanForm({ ...planForm, description: e.target.value })}
+                  className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700">Monthly Price (₹) *</label>
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    placeholder="29999"
+                    value={planForm.price_monthly}
+                    onChange={(e) => setPlanForm({ ...planForm, price_monthly: Number(e.target.value) })}
+                    className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700">Yearly Price (₹)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="299990"
+                    value={planForm.price_yearly}
+                    onChange={(e) => setPlanForm({ ...planForm, price_yearly: Number(e.target.value) })}
+                    className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700">Branches Limit</label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="5 (999 for Unl.)"
+                    value={planForm.branches_limit}
+                    onChange={(e) => setPlanForm({ ...planForm, branches_limit: Number(e.target.value) })}
+                    className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700">Staff Accounts</label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="50 (999 for Unl.)"
+                    value={planForm.staff_limit}
+                    onChange={(e) => setPlanForm({ ...planForm, staff_limit: Number(e.target.value) })}
+                    className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700">AI Credits</label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="50000"
+                    value={planForm.ai_credits_limit}
+                    onChange={(e) => setPlanForm({ ...planForm, ai_credits_limit: Number(e.target.value) })}
+                    className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">Features Included (Comma Separated)</label>
+                <textarea
+                  rows={2}
+                  placeholder="WhatsApp & SMS Gateway, Advanced POS Checkout, AI Visualizer, Dedicated Account Manager"
+                  value={planForm.features}
+                  onChange={(e) => setPlanForm({ ...planForm, features: e.target.value })}
+                  className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <label className="flex items-center gap-2 p-3 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={planForm.is_popular}
+                    onChange={(e) => setPlanForm({ ...planForm, is_popular: e.target.checked })}
+                    className="rounded text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span className="font-bold text-slate-700">Badge 'Most Popular'</span>
+                </label>
+
+                <label className="flex items-center gap-2 p-3 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={planForm.is_active}
+                    onChange={(e) => setPlanForm({ ...planForm, is_active: e.target.checked })}
+                    className="rounded text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span className="font-bold text-slate-700">Tier Active for Sale</span>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                {editingPlan ? (
+                  <button
+                    type="button"
+                    onClick={() => handleDeletePlan(editingPlan.id, editingPlan.name)}
+                    className="px-4 py-2.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-bold transition-colors cursor-pointer text-xs flex items-center gap-1.5"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete Tier
+                  </button>
+                ) : (
+                  <div />
+                )}
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => { setShowPlanModal(false); setEditingPlan(null); }}
+                    className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition-colors cursor-pointer text-xs"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold shadow-md transition-all cursor-pointer text-xs flex items-center gap-2"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    {editingPlan ? "Save Changes" : "Create Tier in Database"}
+                  </button>
+                </div>
               </div>
             </form>
           </div>

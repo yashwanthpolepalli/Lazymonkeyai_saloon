@@ -63,6 +63,24 @@ def create_customer(payload: CustomerCreate, db: Session = Depends(get_db)):
     db.add(customer)
     db.commit()
     db.refresh(customer)
+
+    # Automatically provision User login account and dispatch credential email if email is provided
+    if payload.email:
+        try:
+            from src.services.credential_service import provision_user_account
+            provision_user_account(
+                db=db,
+                name=payload.name,
+                email=payload.email,
+                phone=payload.phone,
+                role="customer",
+                organization_id=payload.organization_id if hasattr(payload, "organization_id") else None,
+                branch_id=payload.preferred_branch_id,
+                department="VIP Client",
+            )
+        except Exception as err:
+            print(f"[CRM] Warning: Credential provisioning failed for customer: {err}")
+
     return customer
 
 @router.get("/{customer_id}", response_model=CustomerResponse)

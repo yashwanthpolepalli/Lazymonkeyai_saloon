@@ -13,6 +13,16 @@ export default defineConfig({
       "@": fileURLToPath(new URL("./src", import.meta.url)),
     },
   },
+  optimizeDeps: {
+    include: [
+      "react",
+      "react-dom",
+      "lucide-react",
+      "framer-motion",
+      "clsx",
+      "tailwind-merge",
+    ],
+  },
   server: {
     host: true,
     port: 3000,

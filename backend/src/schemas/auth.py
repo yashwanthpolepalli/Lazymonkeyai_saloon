@@ -23,7 +23,7 @@ class UserRegisterRequest(BaseModel):
     department: Optional[str] = None
 
 class UserLoginRequest(BaseModel):
-    email: EmailStr
+    email: str # Supports Email, Registered Username/Name, or Phone
     password: str
     organization_id: Optional[str] = None
 

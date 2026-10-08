@@ -97,87 +97,97 @@ export function OperationsModule() {
 
           {/* View 1: By Chairs Grid */}
           {viewMode === "chairs" ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {Array.from({ length: selectedBranch.chairsCount }).map((_, idx) => {
-                const chairNum = idx + 1;
-                const chairAppointments = filteredAppointments.filter(
-                  (a) => a.chairNumber === chairNum
-                );
+            (selectedBranch.chairsCount || 0) > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {Array.from({ length: selectedBranch.chairsCount }).map((_, idx) => {
+                  const chairNum = idx + 1;
+                  const chairAppointments = filteredAppointments.filter(
+                    (a) => a.chairNumber === chairNum
+                  );
 
-                return (
-                  <Card key={chairNum} className="p-4 border-stone-200 space-y-3">
-                    <div className="flex items-center justify-between border-b border-stone-100 pb-2">
-                      <span className="font-mono text-xs font-bold text-stone-900">
-                        Station Chair #{chairNum}
-                      </span>
-                      <Badge
-                        variant={chairAppointments.some((a) => a.status === "in_service") ? "gold" : "outline"}
-                        size="sm"
-                      >
-                        {chairAppointments.some((a) => a.status === "in_service") ? "Active" : "Open"}
-                      </Badge>
-                    </div>
+                  return (
+                    <Card key={chairNum} className="p-4 border-stone-200 space-y-3">
+                      <div className="flex items-center justify-between border-b border-stone-100 pb-2">
+                        <span className="font-mono text-xs font-bold text-stone-900">
+                          Station Chair #{chairNum}
+                        </span>
+                        <Badge
+                          variant={chairAppointments.some((a) => a.status === "in_service") ? "gold" : "outline"}
+                          size="sm"
+                        >
+                          {chairAppointments.some((a) => a.status === "in_service") ? "Active" : "Open"}
+                        </Badge>
+                      </div>
 
-                    <div className="space-y-2">
-                      {chairAppointments.length > 0 ? (
-                        chairAppointments.map((apt) => (
-                          <div
-                            key={apt.id}
-                            className="p-2.5 rounded-lg bg-stone-50 border border-stone-200 text-xs space-y-1"
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="font-semibold text-stone-900">{apt.customerName}</span>
-                              <Badge
-                                variant={
-                                  apt.status === "completed"
-                                    ? "success"
-                                    : apt.status === "in_service"
-                                    ? "gold"
-                                    : "warning"
-                                }
-                                size="sm"
-                              >
-                                {apt.status.replace("_", " ")}
-                              </Badge>
-                            </div>
-                            <p className="text-[11px] text-stone-600 truncate">{apt.serviceName}</p>
-                            <div className="flex items-center justify-between text-[10px] text-stone-400 font-mono pt-1 border-t border-stone-200/60">
-                              <span>{apt.timeSlot} ({apt.durationMinutes}m)</span>
-                              <span>{apt.stylistName}</span>
-                            </div>
-
-                            <div className="flex gap-1 pt-1">
-                              {apt.status === "confirmed" && (
-                                <Button
+                      <div className="space-y-2">
+                        {chairAppointments.length > 0 ? (
+                          chairAppointments.map((apt) => (
+                            <div
+                              key={apt.id}
+                              className="p-2.5 rounded-lg bg-stone-50 border border-stone-200 text-xs space-y-1"
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="font-semibold text-stone-900">{apt.customerName}</span>
+                                <Badge
+                                  variant={
+                                    apt.status === "completed"
+                                      ? "success"
+                                      : apt.status === "in_service"
+                                      ? "gold"
+                                      : "warning"
+                                  }
                                   size="sm"
-                                  variant="gold"
-                                  className="w-full text-[10px] h-6 py-0"
-                                  onClick={() => updateAppointmentStatus(apt.id, "in_service")}
                                 >
-                                  Seat Client
-                                </Button>
-                              )}
-                              {apt.status === "in_service" && (
-                                <Button
-                                  size="sm"
-                                  variant="primary"
-                                  className="w-full text-[10px] h-6 py-0"
-                                  onClick={() => updateAppointmentStatus(apt.id, "completed")}
-                                >
-                                  Done
-                                </Button>
-                              )}
+                                  {apt.status.replace("_", " ")}
+                                </Badge>
+                              </div>
+                              <p className="text-[11px] text-stone-600 truncate">{apt.serviceName}</p>
+                              <div className="flex items-center justify-between text-[10px] text-stone-400 font-mono pt-1 border-t border-stone-200/60">
+                                <span>{apt.timeSlot} ({apt.durationMinutes}m)</span>
+                                <span>{apt.stylistName}</span>
+                              </div>
+
+                              <div className="flex gap-1 pt-1">
+                                {apt.status === "confirmed" && (
+                                  <Button
+                                    size="sm"
+                                    variant="gold"
+                                    className="w-full text-[10px] h-6 py-0"
+                                    onClick={() => updateAppointmentStatus(apt.id, "in_service")}
+                                  >
+                                    Seat Client
+                                  </Button>
+                                )}
+                                {apt.status === "in_service" && (
+                                  <Button
+                                    size="sm"
+                                    variant="primary"
+                                    className="w-full text-[10px] h-6 py-0"
+                                    onClick={() => updateAppointmentStatus(apt.id, "completed")}
+                                  >
+                                    Done
+                                  </Button>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-[11px] text-stone-400 text-center py-4">No bookings scheduled</p>
-                      )}
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
+                          ))
+                        ) : (
+                          <p className="text-[11px] text-stone-400 text-center py-4">No bookings scheduled</p>
+                        )}
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            ) : (
+              <Card className="p-8 text-center border-stone-200 bg-white">
+                <Scissors className="w-8 h-8 text-stone-300 mx-auto mb-2" />
+                <h4 className="text-sm font-semibold text-stone-700">No Styling Chairs Configured</h4>
+                <p className="text-xs text-stone-500 mt-1 max-w-sm mx-auto">
+                  Configure station chairs in Branch Settings or create a new branch to start scheduling appointments.
+                </p>
+              </Card>
+            )
           ) : (
             /* View 2: Timeline Queue */
             <Card className="p-6 space-y-4">

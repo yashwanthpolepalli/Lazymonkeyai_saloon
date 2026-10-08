@@ -62,8 +62,13 @@ import {
   SAMPLE_INVENTORY_CSV,
 } from "@/lib/csvHelper";
 import { API_BASE_URL } from "@/services/apiClient";
+import { GovernanceModule } from "./GovernanceModule";
 
-export function OwnerSettingsView() {
+export function OwnerSettingsView({
+  initialTab = "profile",
+}: {
+  initialTab?: "profile" | "branches" | "customizations" | "mfa" | "discounts" | "governance" | "data-hub" | "integrations";
+}) {
   const {
     ownerProfile,
     updateOwnerProfile,
@@ -87,8 +92,8 @@ export function OwnerSettingsView() {
 
   // Settings Sub-tab state
   const [activeTab, setActiveTab] = useState<
-    "profile" | "branches" | "customizations" | "mfa" | "discounts" | "data-hub" | "integrations"
-  >("profile");
+    "profile" | "branches" | "customizations" | "mfa" | "discounts" | "governance" | "data-hub" | "integrations"
+  >(initialTab);
 
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importModalType, setImportModalType] = useState<ImportDataType>("services");
@@ -132,19 +137,11 @@ export function OwnerSettingsView() {
   // 1. OWNER PROFILE STATE
   // ==========================================
   const [profName, setProfName] = useState(ownerProfile.name);
-  const [profTitle, setProfTitle] = useState(ownerProfile.title);
-  const [profEmail, setProfEmail] = useState(ownerProfile.email);
-  const [profPhone, setProfPhone] = useState(ownerProfile.phone);
-  const [profBio, setProfBio] = useState(ownerProfile.bio);
-  const [profAvatar, setProfAvatar] = useState(ownerProfile.avatarUrl);
-
-  const PRESET_AVATARS = [
-    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80",
-    "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80",
-    "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=300&q=80",
-    "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=300&q=80",
-    "https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=300&q=80",
-  ];
+  const [profTitle, setProfTitle] = useState(ownerProfile.title || "Salon Owner");
+  const [profEmail, setProfEmail] = useState(ownerProfile.email || "");
+  const [profPhone, setProfPhone] = useState(ownerProfile.phone || "");
+  const [profBio, setProfBio] = useState(ownerProfile.bio || "");
+  const [profAvatar, setProfAvatar] = useState(ownerProfile.avatarUrl || "");
 
   const handleAvatarFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -181,57 +178,32 @@ export function OwnerSettingsView() {
 
   // 1. Basic Information
   const [branchName, setBranchName] = useState("");
-  const [branchCode, setBranchCode] = useState(`LM-0${branches.length + 1}`);
+  const [branchCode, setBranchCode] = useState(`BR-0${branches.length + 1}`);
   const [branchType, setBranchType] = useState<string>("Flagship Studio");
-  const [branchManager, setBranchManager] = useState("Vikram Malhotra");
+  const [branchManager, setBranchManager] = useState("");
   const [branchStatus, setBranchStatus] = useState<string>("active");
 
   // 2. Contact Information
-  const [branchPhone, setBranchPhone] = useState("+91 80 4122 8899");
-  const [branchEmail, setBranchEmail] = useState("bengaluru.flagship@lazymonkeyai.luxury");
-  const [branchWhatsapp, setBranchWhatsapp] = useState("+91 98200 99881");
+  const [branchPhone, setBranchPhone] = useState("");
+  const [branchEmail, setBranchEmail] = useState("");
+  const [branchWhatsapp, setBranchWhatsapp] = useState("");
 
   // 3. Location
-  const [branchAddress, setBranchAddress] = useState("Level 2, 100 Feet Road, HAL 2nd Stage, Indiranagar");
-  const [branchCity, setBranchCity] = useState("Bengaluru");
-  const [branchState, setBranchState] = useState("Karnataka");
+  const [branchAddress, setBranchAddress] = useState("");
+  const [branchCity, setBranchCity] = useState("");
+  const [branchState, setBranchState] = useState("");
   const [branchCountry, setBranchCountry] = useState("India");
-  const [branchPinCode, setBranchPinCode] = useState("560038");
-  const [branchMapLocation, setBranchMapLocation] = useState("12.9716° N, 77.5946° E (Indiranagar 100ft)");
+  const [branchPinCode, setBranchPinCode] = useState("");
+  const [branchMapLocation, setBranchMapLocation] = useState("");
 
   // 5. Branding & Operational
-  const [branchImage, setBranchImage] = useState(
-    "https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=1200&q=80"
-  );
-  const [branchLogo, setBranchLogo] = useState(
-    "https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=200&q=80"
-  );
-  const [branchDescription, setBranchDescription] = useState(
-    "Ultra-luxury 14-station flagship atelier featuring private VIP styling suites, organic hair spa lounge & complimentary champagne bar."
-  );
+  const [branchImage, setBranchImage] = useState("");
+  const [branchLogo, setBranchLogo] = useState("");
+  const [branchDescription, setBranchDescription] = useState("");
   const [branchCurrency, setBranchCurrency] = useState("INR");
   const [branchTaxRate, setBranchTaxRate] = useState("18");
-  const [branchChairs, setBranchChairs] = useState("12");
-  const [branchHours, setBranchHours] = useState("09:00 AM - 09:30 PM");
-
-  const PRESET_BRANCH_IMAGES = [
-    {
-      label: "Modern Marble Atelier",
-      img: "https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=1200&q=80",
-    },
-    {
-      label: "Haute Rodeo Suite",
-      img: "https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?auto=format&fit=crop&w=1200&q=80",
-    },
-    {
-      label: "Mayfair Private Lounge",
-      img: "https://images.unsplash.com/photo-1600948836101-f9ffda59d250?auto=format&fit=crop&w=1200&q=80",
-    },
-    {
-      label: "Botanical Spa Studio",
-      img: "https://images.unsplash.com/photo-1562322140-8baeececf3df?auto=format&fit=crop&w=1200&q=80",
-    },
-  ];
+  const [branchChairs, setBranchChairs] = useState("8");
+  const [branchHours, setBranchHours] = useState("09:00 AM - 09:00 PM");
 
   const handleBranchImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -302,9 +274,9 @@ export function OwnerSettingsView() {
   const [customBrandName, setCustomBrandName] = useState(customizationSettings.salonName);
   const [customTagline, setCustomTagline] = useState(customizationSettings.tagline);
   const [customLogoUrl, setCustomLogoUrl] = useState(
-    customizationSettings.logoUrl || "https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=200&q=80"
+    customizationSettings.logoUrl || ""
   );
-  const [customMonogram, setCustomMonogram] = useState(customizationSettings.monogram || "LM");
+  const [customMonogram, setCustomMonogram] = useState(customizationSettings.monogram || "");
   const [customAccent, setCustomAccent] = useState(customizationSettings.accentPreset);
   const [customCurrencySymbol, setCustomCurrencySymbol] = useState(customizationSettings.currencySymbol);
   const [customTaxRate, setCustomTaxRate] = useState(customizationSettings.taxRatePct.toString());
@@ -316,25 +288,6 @@ export function OwnerSettingsView() {
   const [customSmsReminder, setCustomSmsReminder] = useState(customizationSettings.smsReminder2h);
   const [customWhatsappReceipt, setCustomWhatsappReceipt] = useState(customizationSettings.whatsappReceipt);
   const [customOnlineBooking, setCustomOnlineBooking] = useState(customizationSettings.onlineBookingOpen);
-
-  const PRESET_SALON_LOGOS = [
-    {
-      label: "Gold Leaf Emblem",
-      url: "https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=200&q=80",
-    },
-    {
-      label: "Haute Monogram",
-      url: "https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?auto=format&fit=crop&w=200&q=80",
-    },
-    {
-      label: "Minimalist Crown",
-      url: "https://images.unsplash.com/photo-1600948836101-f9ffda59d250?auto=format&fit=crop&w=200&q=80",
-    },
-    {
-      label: "Diamond Silhouette",
-      url: "https://images.unsplash.com/photo-1562322140-8baeececf3df?auto=format&fit=crop&w=200&q=80",
-    },
-  ];
 
   const handleSalonLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -608,7 +561,27 @@ export function OwnerSettingsView() {
             </span>
           </button>
 
-          {/* Tab 6: Data Import & Sample CSV Hub */}
+          {/* Tab 6: Governance & Institutional Policies */}
+          <button
+            onClick={() => setActiveTab("governance")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+              activeTab === "governance"
+                ? "bg-sky-500 text-white shadow-md shadow-sky-500/20 font-bold"
+                : "bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200/80"
+            }`}
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-indigo-500" />
+            <span>Governance & Policies</span>
+            <span
+              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                activeTab === "governance" ? "bg-white/20 text-white" : "bg-indigo-100 text-indigo-800"
+              }`}
+            >
+              Policy Engine
+            </span>
+          </button>
+
+          {/* Tab 7: Data Import & Sample CSV Hub */}
           <button
             onClick={() => setActiveTab("data-hub")}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
@@ -659,11 +632,17 @@ export function OwnerSettingsView() {
             {/* Left: Profile Preview Card & Avatar Upload */}
             <div className="bg-white rounded-2xl p-6 border border-slate-200/90 shadow-xs flex flex-col items-center text-center">
               <div className="relative group mb-4">
-                <img
-                  src={profAvatar}
-                  alt={profName}
-                  className="w-32 h-32 rounded-full object-cover border-4 border-white shadow-lg ring-2 ring-sky-200"
-                />
+                {profAvatar ? (
+                  <img
+                    src={profAvatar}
+                    alt={profName}
+                    className="w-32 h-32 rounded-full object-cover border-4 border-white shadow-lg ring-2 ring-sky-200"
+                  />
+                ) : (
+                  <div className="w-32 h-32 rounded-full bg-gradient-to-tr from-sky-600 to-indigo-600 text-white font-bold text-3xl flex items-center justify-center border-4 border-white shadow-lg ring-2 ring-sky-200">
+                    {(profName || "OW").slice(0, 2).toUpperCase()}
+                  </div>
+                )}
                 <label
                   htmlFor="avatar-upload"
                   className="absolute bottom-1 right-1 p-2.5 rounded-full bg-sky-500 hover:bg-sky-600 text-white shadow-md cursor-pointer transition-transform hover:scale-105"
@@ -688,29 +667,6 @@ export function OwnerSettingsView() {
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
                 <span>Verified Franchise Owner</span>
               </span>
-
-              {/* Preset Avatar Selector */}
-              <div className="w-full mt-6 pt-5 border-t border-slate-100 text-left">
-                <label className="text-xs font-bold text-slate-700 block mb-2">
-                  Select Preset Luxury Avatars
-                </label>
-                <div className="flex items-center justify-center gap-2.5 flex-wrap">
-                  {PRESET_AVATARS.map((url, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => setProfAvatar(url)}
-                      className={`w-10 h-10 rounded-full overflow-hidden border-2 transition-all cursor-pointer ${
-                        profAvatar === url
-                          ? "border-sky-500 ring-2 ring-sky-300 scale-105"
-                          : "border-slate-200 opacity-70 hover:opacity-100"
-                      }`}
-                    >
-                      <img src={url} alt={`Preset ${idx}`} className="w-full h-full object-cover" />
-                    </button>
-                  ))}
-                </div>
-              </div>
 
               {/* Upload Custom File Button */}
               <label
@@ -1064,7 +1020,7 @@ export function OwnerSettingsView() {
                       {customBrandName || "SALON BRAND NAME"}
                     </div>
                     <div className="text-[10px] text-slate-300 font-mono tracking-wider truncate max-w-[220px]">
-                      {customTagline || "The Pinnacle of Haute Coiffure"}
+                      {customTagline || "Your Brand Tagline"}
                     </div>
                   </div>
                 </div>
@@ -1112,28 +1068,6 @@ export function OwnerSettingsView() {
                     <div className="text-[10px] text-slate-400">Recommended 512x512 transparent PNG or SVG</div>
                   </div>
                 </div>
-
-                {/* Preset Logos */}
-                <div className="pt-2 border-t border-slate-200/70">
-                  <span className="text-[10px] font-bold text-slate-500 block mb-1">Select Preset Luxury Logos:</span>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {PRESET_SALON_LOGOS.map((preset, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => setCustomLogoUrl(preset.url)}
-                        className={`px-2.5 py-1 rounded-lg border text-[10px] font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
-                          customLogoUrl === preset.url
-                            ? "border-sky-500 bg-sky-50 text-sky-700 font-bold ring-1 ring-sky-300"
-                            : "border-slate-200 bg-white text-slate-600 hover:bg-slate-100"
-                        }`}
-                      >
-                        <img src={preset.url} alt={preset.label} className="w-3.5 h-3.5 rounded-full object-cover" />
-                        <span>{preset.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
               </div>
 
               {/* Salon Name & Monogram */}
@@ -1147,7 +1081,7 @@ export function OwnerSettingsView() {
                     required
                     value={customBrandName}
                     onChange={(e) => setCustomBrandName(e.target.value)}
-                    placeholder="e.g. LAZYMONKEY AI LUXURY SALON"
+                    placeholder="e.g. Luxury Hair & Beauty Atelier"
                     className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 bg-slate-50/50 focus:bg-white focus:outline-hidden focus:border-sky-500 font-semibold"
                   />
                 </div>
@@ -2333,7 +2267,7 @@ export function OwnerSettingsView() {
                       {/* Thermal Receipt Visual Preview */}
                       <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 font-mono text-xs text-slate-800 space-y-2 shadow-inner">
                         <div className="text-center pb-2 border-b border-dashed border-slate-300">
-                          <div className="font-bold text-slate-900 text-xs">LAZYMONKEY AI LUXURY ATELIER</div>
+                          <div className="font-bold text-slate-900 text-xs">{customizationSettings?.salonName || "SALON ATELIER"}</div>
                           <div className="text-[10px] text-slate-500">GSTIN: {gstin || "N/A"}</div>
                           <div className="text-[10px] text-slate-500">SAC: {hsnSacCode}</div>
                         </div>
@@ -2434,7 +2368,16 @@ export function OwnerSettingsView() {
       )}
 
       {/* ========================================================================= */}
-      {/* 6. DATA IMPORT & SAMPLE CSV / EXCEL HUB TAB                                */}
+      {/* 6. GOVERNANCE & INSTITUTIONAL POLICIES TAB                                 */}
+      {/* ========================================================================= */}
+      {activeTab === "governance" && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          <GovernanceModule />
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 7. DATA IMPORT & SAMPLE CSV / EXCEL HUB TAB                                */}
       {/* ========================================================================= */}
       {activeTab === "data-hub" && (
         <div className="space-y-6 animate-in fade-in duration-200">
@@ -2658,14 +2601,14 @@ export function OwnerSettingsView() {
                     <input
                       readOnly
                       type="text"
-                      value={`http://localhost:8000/api/v1/calendar-sync/ical/feed.ics${
+                      value={`${API_BASE_URL}/calendar-sync/ical/feed.ics${
                         selectedFeedBranch !== "all" ? `?branch_id=${selectedFeedBranch}` : ""
                       }`}
                       className="flex-1 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-[11px] font-mono text-slate-700 select-all"
                     />
                     <button
                       onClick={() => {
-                        const url = `http://localhost:8000/api/v1/calendar-sync/ical/feed.ics${
+                        const url = `${API_BASE_URL}/calendar-sync/ical/feed.ics${
                           selectedFeedBranch !== "all" ? `?branch_id=${selectedFeedBranch}` : ""
                         }`;
                         navigator.clipboard.writeText(url);
@@ -2685,7 +2628,7 @@ export function OwnerSettingsView() {
               {/* Action Buttons */}
               <div className="grid grid-cols-2 gap-3 pt-2">
                 <a
-                  href={`http://localhost:8000/api/v1/calendar-sync/ical/feed.ics${
+                  href={`${API_BASE_URL}/calendar-sync/ical/feed.ics${
                     selectedFeedBranch !== "all" ? `?branch_id=${selectedFeedBranch}` : ""
                   }`}
                   download="salon_appointments.ics"
@@ -2699,7 +2642,7 @@ export function OwnerSettingsView() {
                   onClick={async () => {
                     setGcalLoading(true);
                     try {
-                      const res = await fetch("http://localhost:8000/api/v1/calendar-sync/oauth/google-url");
+                      const res = await fetch(`${API_BASE_URL}/calendar-sync/oauth/google-url`);
                       const data = await res.json();
                       if (data.oauth_url) {
                         window.open(data.oauth_url, "_blank");
@@ -2818,7 +2761,7 @@ export function OwnerSettingsView() {
                 onClick={async () => {
                   setWaSending(true);
                   try {
-                    const res = await fetch("http://localhost:8000/api/v1/crm_modules/whatsapp/send", {
+                    const res = await fetch(`${API_BASE_URL}/crm_modules/whatsapp/send`, {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({
@@ -3186,7 +3129,7 @@ export function OwnerSettingsView() {
                       required
                       value={branchEmail}
                       onChange={(e) => setBranchEmail(e.target.value)}
-                      placeholder="indiranagar@lazymonkeyai.luxury"
+                      placeholder="branch@yoursalon.com"
                       className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 bg-slate-50/50 focus:bg-white focus:outline-hidden focus:border-sky-500"
                     />
                   </div>
@@ -3376,30 +3319,6 @@ export function OwnerSettingsView() {
                       placeholder="Logo URL"
                       className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-[11px] text-slate-900 bg-white focus:outline-hidden"
                     />
-                  </div>
-                </div>
-
-                {/* Preset Imagery */}
-                <div>
-                  <label className="text-[11px] font-bold text-slate-500 block mb-1.5">
-                    Or Select Preset Architectural Theme:
-                  </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {PRESET_BRANCH_IMAGES.map((preset, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => setBranchImage(preset.img)}
-                        className={`p-1.5 rounded-xl border text-left transition-all cursor-pointer ${
-                          branchImage === preset.img
-                            ? "border-sky-500 ring-2 ring-sky-300 bg-sky-50/50"
-                            : "border-slate-200 hover:bg-slate-100"
-                        }`}
-                      >
-                        <img src={preset.img} alt={preset.label} className="w-full h-12 rounded-lg object-cover mb-1" />
-                        <span className="text-[10px] font-medium text-slate-700 truncate block">{preset.label}</span>
-                      </button>
-                    ))}
                   </div>
                 </div>
 

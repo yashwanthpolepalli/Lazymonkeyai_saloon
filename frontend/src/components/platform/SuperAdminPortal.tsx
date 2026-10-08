@@ -24,35 +24,8 @@ export function SuperAdminPortal() {
 
   const [activeTab, setActiveTab] = useState<"organizations" | "health" | "billing" | "features">("organizations");
 
-  const organizations = [
-    {
-      id: "org_01",
-      name: "LazyMonkey Luxury Beauty Group",
-      tier: "Enterprise Unlimited",
-      chains: 4,
-      totalSalons: 18,
-      status: "Active",
-      mrr: "₹1,450,000 / mo",
-    },
-    {
-      id: "org_02",
-      name: "Maison De Beauté Paris-London",
-      tier: "Enterprise Global",
-      chains: 2,
-      totalSalons: 8,
-      status: "Active",
-      mrr: "£18,500 / mo",
-    },
-    {
-      id: "org_03",
-      name: "Beverly Hills Haute Aesthetics LLC",
-      tier: "Elite Studio",
-      chains: 1,
-      totalSalons: 3,
-      status: "Active",
-      mrr: "$12,000 / mo",
-    },
-  ];
+  // Organizations are loaded from the backend; empty until provisioned
+  const organizations: { id: string; name: string; tier: string; chains: number; totalSalons: number; status: string; mrr: string }[] = [];
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
@@ -65,7 +38,7 @@ export function SuperAdminPortal() {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold text-stone-100">
-                LazyMonkey AI Platform Cloud Orchestrator
+                AI Platform Cloud Orchestrator
               </h1>
               <Badge variant="gold" size="sm">
                 Super Admin Root
@@ -79,7 +52,7 @@ export function SuperAdminPortal() {
 
         <div className="flex items-center gap-2">
           <Badge variant="success" size="md">
-            All 4 Regions Operational
+            Platform Operational
           </Badge>
         </div>
       </div>
@@ -118,34 +91,40 @@ export function SuperAdminPortal() {
           </div>
 
           <div className="space-y-3">
-            {organizations.map((org) => (
-              <div
-                key={org.id}
-                className="p-4 rounded-xl border border-stone-200 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
-              >
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h4 className="text-sm font-semibold text-stone-900">{org.name}</h4>
-                    <Badge variant="gold" size="sm">
-                      {org.tier}
-                    </Badge>
-                  </div>
-                  <p className="text-stone-500 mt-0.5">
-                    Chains: {org.chains} • Total Branches: {org.totalSalons}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-4">
-                  <div className="text-right">
-                    <span className="text-[10px] text-stone-400 uppercase block font-mono">Plan MRR</span>
-                    <span className="font-mono font-bold text-stone-900 text-sm">{org.mrr}</span>
-                  </div>
-                  <Button variant="outline" size="sm">
-                    Manage Tenant
-                  </Button>
-                </div>
+            {organizations.length === 0 ? (
+              <div className="py-12 text-center text-stone-400 text-sm">
+                No tenants provisioned yet. Click <strong>Provision New Tenant</strong> to add your first organization.
               </div>
-            ))}
+            ) : (
+              organizations.map((org) => (
+                <div
+                  key={org.id}
+                  className="p-4 rounded-xl border border-stone-200 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-semibold text-stone-900">{org.name}</h4>
+                      <Badge variant="gold" size="sm">
+                        {org.tier}
+                      </Badge>
+                    </div>
+                    <p className="text-stone-500 mt-0.5">
+                      Chains: {org.chains} • Total Branches: {org.totalSalons}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <span className="text-[10px] text-stone-400 uppercase block font-mono">Plan MRR</span>
+                      <span className="font-mono font-bold text-stone-900 text-sm">{org.mrr}</span>
+                    </div>
+                    <Button variant="outline" size="sm">
+                      Manage Tenant
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </Card>
       )}

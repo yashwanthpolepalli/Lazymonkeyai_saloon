@@ -31,6 +31,7 @@ import {
 import { Service, GenderType, AddOn, ServiceOptionGroup, BookingSelectedOption } from "@/types";
 import { downloadCsvFile, SAMPLE_SERVICES_CSV } from "@/lib/csvHelper";
 import { DataImportModal } from "@/components/common/DataImportModal";
+import { MasterCatalogExplorerModal } from "@/components/common/MasterCatalogExplorerModal";
 
 export function CustomerServicesView() {
   const {
@@ -50,6 +51,7 @@ export function CustomerServicesView() {
   const [genderFilter, setGenderFilter] = useState<GenderType | "all">("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
+  const [isMasterCatalogOpen, setIsMasterCatalogOpen] = useState<boolean>(false);
   const [customizingService, setCustomizingService] = useState<Service | null>(null);
 
   // Selected variant per service card: { [serviceId]: 'men' | 'women' | 'kids' | 'unisex' }
@@ -305,7 +307,7 @@ export function CustomerServicesView() {
 
   // Download Sample Master CSV
   const handleDownloadSample = () => {
-    downloadCsvFile("lazymonkey_master_salon_services_sample.csv", SAMPLE_SERVICES_CSV);
+    downloadCsvFile("salon_services_template.csv", SAMPLE_SERVICES_CSV);
     addToast(
       "success",
       "Sample CSV Saved",
@@ -337,23 +339,31 @@ export function CustomerServicesView() {
             </p>
           </div>
 
-          {/* Import / Export Action Tools */}
+          {/* Master Catalog & Import / Export Action Tools */}
           <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => setIsMasterCatalogOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-500 hover:to-amber-700 text-slate-950 text-xs font-bold transition-all hover:scale-[1.02] shadow-lg shadow-amber-500/20 cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4 text-slate-950" />
+              <span>Master Catalog Library (15 Categories)</span>
+            </button>
+
             <button
               onClick={handleDownloadSample}
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/20 text-xs font-semibold transition-all backdrop-blur-md hover:scale-[1.02] shadow-sm cursor-pointer"
-              title="Download sample CSV template with 12 master categories"
+              title="Download sample CSV template with master categories"
             >
               <Download className="w-4 h-4 text-emerald-400" />
-              <span>Download Sample CSV</span>
+              <span>Sample CSV</span>
             </button>
 
             <button
               onClick={() => setIsImportModalOpen(true)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 text-xs font-bold transition-all hover:scale-[1.02] shadow-lg shadow-amber-500/20 cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/20 text-xs font-semibold transition-all backdrop-blur-md hover:scale-[1.02] shadow-sm cursor-pointer"
             >
-              <Upload className="w-4 h-4 text-slate-950" />
-              <span>Import Services CSV</span>
+              <Upload className="w-4 h-4 text-amber-300" />
+              <span>Import CSV</span>
             </button>
           </div>
         </div>
@@ -989,6 +999,12 @@ export function CustomerServicesView() {
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
         dataType="services"
+      />
+
+      {/* 9. Master Service Catalog Explorer Modal */}
+      <MasterCatalogExplorerModal
+        isOpen={isMasterCatalogOpen}
+        onClose={() => setIsMasterCatalogOpen(false)}
       />
     </div>
   );

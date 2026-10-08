@@ -67,27 +67,27 @@ export function MainNavbar({ onLogout }: MainNavbarProps) {
       subtitle: "Booking, Entitlements & Wallet",
       badgeColor: "bg-pink-50 border-pink-200 text-pink-700",
       icon: <Sparkles className="w-4 h-4 text-pink-600" />,
-      userTitle: currentUser?.name || currentCustomer.name,
-      userSubtitle: `${currentCustomer.membershipTier || "Gold"} VIP Member`,
-      avatarUrl: currentUser?.avatar || currentCustomer.avatar || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=160&q=80",
+      userTitle: currentUser?.name || currentCustomer.name || "Customer",
+      userSubtitle: `${currentCustomer.membershipTier || "Standard"} Member`,
+      avatarUrl: currentUser?.avatar || currentCustomer.avatar || "",
     },
     owner: {
-      title: `${currentOrganization.name} Suite`,
-      subtitle: `${currentOrganization.business_type.replace("_", " ").toUpperCase()} MODEL`,
+      title: `${currentOrganization?.name || "Salon OS"} Suite`,
+      subtitle: `${(currentOrganization?.business_type || "general").replace("_", " ").toUpperCase()} MODEL`,
       badgeColor: "bg-emerald-50 border-emerald-200 text-emerald-800",
       icon: <Crown className="w-4 h-4 text-emerald-600" />,
       userTitle: currentUser?.name || ownerProfile?.name || "Salon Director",
-      userSubtitle: `${currentOrganization.business_type.toUpperCase()} MANAGEMENT`,
-      avatarUrl: currentUser?.avatar || ownerProfile?.avatarUrl || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=160&q=80",
+      userSubtitle: `${(currentOrganization?.business_type || "general").toUpperCase()} MANAGEMENT`,
+      avatarUrl: currentUser?.avatar || ownerProfile?.avatarUrl || "",
     },
     staff: {
       title: "Staff & Artisan Portal",
       subtitle: "Client Queue, Payrolls & Attendance",
       badgeColor: "bg-indigo-50 border-indigo-200 text-indigo-800",
       icon: <Scissors className="w-4 h-4 text-indigo-600" />,
-      userTitle: currentUser?.name || currentStaff.name || "Aria Sharma",
-      userSubtitle: `${currentStaff.tier?.toUpperCase() || "MASTER"} STYLIST`,
-      avatarUrl: currentUser?.avatar || currentStaff.avatar || "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=160&q=80",
+      userTitle: currentUser?.name || currentStaff.name || "Staff",
+      userSubtitle: `${currentStaff.tier?.toUpperCase() || "STAFF"} STYLIST`,
+      avatarUrl: currentUser?.avatar || currentStaff.avatar || "",
     },
     admin: {
       title: "Super Admin Console",
@@ -96,7 +96,7 @@ export function MainNavbar({ onLogout }: MainNavbarProps) {
       icon: <Building2 className="w-4 h-4 text-purple-600" />,
       userTitle: currentUser?.name || "Platform Super Admin",
       userSubtitle: "Global Platform Oversight",
-      avatarUrl: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=160&q=80",
+      avatarUrl: currentUser?.avatar || "",
     },
     auditor: {
       title: "Governance & Audit Desk",
@@ -105,16 +105,16 @@ export function MainNavbar({ onLogout }: MainNavbarProps) {
       icon: <ShieldCheck className="w-4 h-4 text-indigo-600" />,
       userTitle: currentUser?.name || "Compliance Auditor",
       userSubtitle: "Regulatory Compliance",
-      avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=160&q=80",
+      avatarUrl: currentUser?.avatar || "",
     },
     director: {
-      title: `${currentOrganization.name} Director`,
+      title: `${currentOrganization?.name || "Salon OS"} Director`,
       subtitle: "Enterprise Strategy & Operations",
       badgeColor: "bg-amber-50 border-amber-200 text-amber-800",
       icon: <Crown className="w-4 h-4 text-amber-600" />,
       userTitle: currentUser?.name || "Executive Director",
       userSubtitle: "Executive Management",
-      avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=160&q=80",
+      avatarUrl: currentUser?.avatar || "",
     },
     branch_manager: {
       title: "Branch Manager Portal",
@@ -123,7 +123,7 @@ export function MainNavbar({ onLogout }: MainNavbarProps) {
       icon: <Users className="w-4 h-4 text-blue-600" />,
       userTitle: currentUser?.name || "Branch Lead",
       userSubtitle: "Facility Management",
-      avatarUrl: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=160&q=80",
+      avatarUrl: currentUser?.avatar || "",
     },
     cashier: {
       title: "Front Desk & POS Cashier",
@@ -132,44 +132,78 @@ export function MainNavbar({ onLogout }: MainNavbarProps) {
       icon: <CreditCard className="w-4 h-4 text-teal-600" />,
       userTitle: currentUser?.name || "Front Desk Cashier",
       userSubtitle: "Billing & Reception",
-      avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=160&q=80",
+      avatarUrl: currentUser?.avatar || "",
     },
   }[activeRole] || {
     title: "Salon Portal",
-    subtitle: "Salon Operating System",
+    subtitle: " LazyMonkeyai Salon",
     badgeColor: "bg-slate-50 border-slate-200 text-slate-800",
     icon: <Sparkles className="w-4 h-4 text-slate-600" />,
     userTitle: currentUser?.name || "User",
     userSubtitle: "Staff",
-    avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=160&q=80",
+    avatarUrl: currentUser?.avatar || "",
   };
 
   // Role-Specific Horizontal Sub-Navigation Tabs with Multi-color Badge Icons
   const customerTabs = [
-    { id: "memberships", label: "Memberships & Quota", icon: <Crown className="w-4 h-4 text-amber-600" />, bg: "bg-amber-100 text-amber-700" },
     { id: "booking", label: "Book Appointment", icon: <Calendar className="w-4 h-4 text-sky-600" />, bg: "bg-sky-100 text-sky-700" },
     { id: "services", label: "Services Catalog", icon: <Scissors className="w-4 h-4 text-violet-600" />, bg: "bg-violet-100 text-violet-700" },
+    { id: "memberships", label: "Memberships & Quota", icon: <Crown className="w-4 h-4 text-amber-600" />, bg: "bg-amber-100 text-amber-700" },
     { id: "wallet", label: "Wallet & Rewards", icon: <Wallet className="w-4 h-4 text-emerald-600" />, bg: "bg-emerald-100 text-emerald-700" },
     { id: "payment", label: "Payment & Checkout", icon: <CreditCard className="w-4 h-4 text-indigo-600" />, bg: "bg-indigo-100 text-indigo-700" },
     { id: "invoices", label: "Invoices & Receipts", icon: <FileText className="w-4 h-4 text-teal-600" />, bg: "bg-teal-100 text-teal-700" },
   ];
 
+  // 1. Owner & Director (Full Access)
   const ownerTabs = [
     { id: "dashboard", label: "Executive Dashboard", icon: <BarChart3 className="w-4 h-4 text-blue-600" />, bg: "bg-blue-100 text-blue-700" },
-    { id: "customers", label: "CRM & Beneficiaries", icon: <UserPlus className="w-4 h-4 text-rose-600" />, bg: "bg-rose-100 text-rose-700" },
+    { id: "customers", label: "CRM & Customers", icon: <UserPlus className="w-4 h-4 text-rose-600" />, bg: "bg-rose-100 text-rose-700" },
     { id: "staff", label: "Staff & Payroll", icon: <Scissors className="w-4 h-4 text-purple-600" />, bg: "bg-purple-100 text-purple-700" },
     { id: "pos", label: "Payments & Billings", icon: <Receipt className="w-4 h-4 text-emerald-600" />, bg: "bg-emerald-100 text-emerald-700" },
     { id: "services", label: "Services Menu", icon: <Tag className="w-4 h-4 text-pink-600" />, bg: "bg-pink-100 text-pink-700" },
     { id: "memberships", label: "Memberships & Plans", icon: <Crown className="w-4 h-4 text-amber-600" />, bg: "bg-amber-100 text-amber-700" },
     { id: "inventory", label: "Inventory Stock", icon: <Package className="w-4 h-4 text-orange-600" />, bg: "bg-orange-100 text-orange-700" },
-    { id: "governance", label: "Governance & Policies", icon: <ShieldCheck className="w-4 h-4 text-indigo-600" />, bg: "bg-indigo-100 text-indigo-700" },
     { id: "settings", label: "Settings & System", icon: <Settings className="w-4 h-4 text-sky-600" />, bg: "bg-sky-100 text-sky-700" },
   ];
 
-  const staffTabs = [
+  // 2. Branch Manager (Full Facility Operations + Branch Settings)
+  const managerTabs = [
+    { id: "dashboard", label: "Branch Dashboard", icon: <BarChart3 className="w-4 h-4 text-blue-600" />, bg: "bg-blue-100 text-blue-700" },
+    { id: "customers", label: "Branch Clients", icon: <UserPlus className="w-4 h-4 text-rose-600" />, bg: "bg-rose-100 text-rose-700" },
+    { id: "staff", label: "Branch Staff & Rosters", icon: <Scissors className="w-4 h-4 text-purple-600" />, bg: "bg-purple-100 text-purple-700" },
+    { id: "pos", label: "Branch POS", icon: <Receipt className="w-4 h-4 text-emerald-600" />, bg: "bg-emerald-100 text-emerald-700" },
+    { id: "services", label: "Services Catalog", icon: <Tag className="w-4 h-4 text-pink-600" />, bg: "bg-pink-100 text-pink-700" },
+    { id: "memberships", label: "Memberships & Passes", icon: <Crown className="w-4 h-4 text-amber-600" />, bg: "bg-amber-100 text-amber-700" },
+    { id: "inventory", label: "Branch Inventory", icon: <Package className="w-4 h-4 text-orange-600" />, bg: "bg-orange-100 text-orange-700" },
+    { id: "settings", label: "Branch Settings", icon: <Settings className="w-4 h-4 text-sky-600" />, bg: "bg-sky-100 text-sky-700" },
+  ];
+
+  // 3. Reception / Cashier (Front Desk, Bookings, Clients, POS, View-only Services, Retail Inventory)
+  const receptionTabs = [
+    { id: "dashboard", label: "Front Desk & Queue", icon: <Calendar className="w-4 h-4 text-blue-600" />, bg: "bg-blue-100 text-blue-700" },
+    { id: "customers", label: "Client Directory", icon: <UserPlus className="w-4 h-4 text-rose-600" />, bg: "bg-rose-100 text-rose-700" },
+    { id: "pos", label: "Billing & POS", icon: <Receipt className="w-4 h-4 text-emerald-600" />, bg: "bg-emerald-100 text-emerald-700" },
+    { id: "services", label: "Services Menu (View)", icon: <Tag className="w-4 h-4 text-pink-600" />, bg: "bg-pink-100 text-pink-700" },
+    { id: "inventory", label: "Retail Inventory", icon: <Package className="w-4 h-4 text-orange-600" />, bg: "bg-orange-100 text-orange-700" },
+  ];
+
+  // 4. Stylist / Staff (My Chair, My Schedule, My Clients, Protocols, Dispensary, Own Leaves & Commissions)
+  const stylistTabs = [
     { id: "dashboard", label: "My Chair & Queue", icon: <Scissors className="w-4 h-4 text-sky-600" />, bg: "bg-sky-100 text-sky-700" },
-    { id: "payrolls", label: "Payrolls & Salary Slips", icon: <DollarSign className="w-4 h-4 text-emerald-600" />, bg: "bg-emerald-100 text-emerald-700" },
+    { id: "customers", label: "My Clients", icon: <UserPlus className="w-4 h-4 text-rose-600" />, bg: "bg-rose-100 text-rose-700" },
+    { id: "services", label: "Services Menu (View)", icon: <Tag className="w-4 h-4 text-pink-600" />, bg: "bg-pink-100 text-pink-700" },
+    { id: "inventory", label: "Dispensary Stock", icon: <Package className="w-4 h-4 text-orange-600" />, bg: "bg-orange-100 text-orange-700" },
     { id: "attendance", label: "Attendance & Clock In", icon: <Clock className="w-4 h-4 text-indigo-600" />, bg: "bg-indigo-100 text-indigo-700" },
+    { id: "payrolls", label: "My Commissions & Pay", icon: <DollarSign className="w-4 h-4 text-emerald-600" />, bg: "bg-emerald-100 text-emerald-700" },
+  ];
+
+  // 5. Accountant / Auditor (Financial Summaries, POS Invoices Audit, Stock Costing, Payroll, Audit Reports)
+  const accountantTabs = [
+    { id: "dashboard", label: "Financial Summary & P&L", icon: <BarChart3 className="w-4 h-4 text-blue-600" />, bg: "bg-blue-100 text-blue-700" },
+    { id: "pos", label: "Invoices & Ledger Audit", icon: <Receipt className="w-4 h-4 text-emerald-600" />, bg: "bg-emerald-100 text-emerald-700" },
+    { id: "inventory", label: "Stock Valuation & Costing", icon: <Package className="w-4 h-4 text-orange-600" />, bg: "bg-orange-100 text-orange-700" },
+    { id: "staff", label: "Payroll & Salary Structures", icon: <Scissors className="w-4 h-4 text-purple-600" />, bg: "bg-purple-100 text-purple-700" },
+    { id: "payrolls", label: "Commissions & Payouts", icon: <DollarSign className="w-4 h-4 text-emerald-600" />, bg: "bg-emerald-100 text-emerald-700" },
   ];
 
   const adminTabs = [
@@ -187,10 +221,16 @@ export function MainNavbar({ onLogout }: MainNavbarProps) {
     activeRole === "customer"
       ? customerTabs
       : activeRole === "staff"
-      ? staffTabs
-      : activeRole === "admin"
-      ? adminTabs
-      : ownerTabs;
+        ? stylistTabs
+        : activeRole === "cashier"
+          ? receptionTabs
+          : activeRole === "branch_manager"
+            ? managerTabs
+            : activeRole === "auditor"
+              ? accountantTabs
+              : activeRole === "admin"
+                ? adminTabs
+                : ownerTabs;
 
   return (
     <header className="sticky top-0 z-40 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/90 shadow-xs">
@@ -207,15 +247,15 @@ export function MainNavbar({ onLogout }: MainNavbarProps) {
               />
             ) : (
               <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-500 via-rose-500 to-amber-500 flex items-center justify-center text-white font-bold text-sm shadow-xs font-sans">
-                {customizationSettings?.monogram || "LM"}
+                {customizationSettings?.monogram || "OS"}
               </div>
             )}
             <div className="flex flex-col">
               <span className="text-base font-bold tracking-tight text-slate-900 flex items-center gap-1.5 font-sans">
-                {customizationSettings?.salonName || "LAZYMONKEY AI"}
+                {customizationSettings?.salonName || "Salon Management"}
               </span>
               <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest font-mono truncate max-w-[240px]">
-                {customizationSettings?.tagline || "LUXE SALON OPERATING SYSTEM"}
+                {customizationSettings?.tagline || "Enterprise Operating System"}
               </span>
             </div>
           </div>
@@ -365,11 +405,17 @@ export function MainNavbar({ onLogout }: MainNavbarProps) {
 
           {/* User Profile Card */}
           <div className="flex items-center gap-2.5 pl-2 border-l border-slate-200">
-            <img
-              src={roleMeta.avatarUrl}
-              alt={roleMeta.userTitle}
-              className="w-8 h-8 rounded-full object-cover border border-amber-300/60 shadow-xs"
-            />
+            {roleMeta.avatarUrl ? (
+              <img
+                src={roleMeta.avatarUrl}
+                alt={roleMeta.userTitle}
+                className="w-8 h-8 rounded-full object-cover border border-amber-300/60 shadow-xs"
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-xs shadow-xs">
+                {(roleMeta.userTitle || "U").charAt(0).toUpperCase()}
+              </div>
+            )}
             <div className="hidden sm:block text-left">
               <div className="font-bold text-xs text-slate-900 leading-tight">
                 {roleMeta.userTitle}
@@ -453,9 +499,8 @@ export function MainNavbar({ onLogout }: MainNavbarProps) {
                 )}
               >
                 <div
-                  className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${
-                    isActive ? "bg-white/20 text-white" : tab.bg
-                  }`}
+                  className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${isActive ? "bg-white/20 text-white" : tab.bg
+                    }`}
                 >
                   {tab.icon}
                 </div>

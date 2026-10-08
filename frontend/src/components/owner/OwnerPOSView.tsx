@@ -709,7 +709,7 @@ export function OwnerPOSView() {
                   <span>Current Bill</span>
                 </h3>
                 <p className="text-[11px] text-slate-400">
-                  Guest: <span className="font-semibold text-slate-800">{activeCustomer.name}</span>
+                  Guest: <span className="font-semibold text-slate-800">{activeCustomer?.name || "Walk-in Guest"}</span>
                 </p>
               </div>
               <span className="text-xs font-mono font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded-lg">

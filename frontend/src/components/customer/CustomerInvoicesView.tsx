@@ -7,91 +7,38 @@ import {
   Download,
   Printer,
   CheckCircle2,
-  Clock,
   Search,
-  ExternalLink,
-  ShieldCheck,
-  Building,
   Eye,
   X,
-  Sparkles,
+  Receipt,
 } from "lucide-react";
-import { Invoice } from "@/types";
 
 export function CustomerInvoicesView() {
   const { currentCustomer, selectedBranch, addToast } = useSalon();
   const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>("");
 
-  const invoices = [
-    {
-      id: "INV-2026-8941",
-      date: "Sep 04, 2026",
-      branchName: "Atelier Mumbai Flagship",
-      services: [
-        { name: "Balayage & Olaplex Bond Repair Spa", qty: 1, price: 5500 },
-        { name: "Moroccanoil Botanical Scalp Therapy", qty: 1, price: 1800 },
-      ],
-      subtotal: 7300,
-      discount: 1460, // 20% Gold
-      tax: 1051,
-      total: 6891,
-      status: "paid",
-      paymentMethod: "Salon Cash Wallet",
-      stylist: "Aria Sharma (Master Stylist)",
-    },
-    {
-      id: "INV-2026-7812",
-      date: "Aug 22, 2026",
-      branchName: "Atelier Mumbai Flagship",
-      services: [
-        { name: "24K Gold Illuminating Facial Ritual", qty: 1, price: 3800 },
-        { name: "Luxury French Gel Manicure & Pedicure", qty: 1, price: 2400 },
-      ],
-      subtotal: 6200,
-      discount: 1240,
-      tax: 892,
-      total: 5852,
-      status: "paid",
-      paymentMethod: "UPI / PhonePe",
-      stylist: "Rahul Mehta (Senior Stylist)",
-    },
-    {
-      id: "INV-2026-6510",
-      date: "Jul 18, 2026",
-      branchName: "Atelier Mumbai Flagship",
-      services: [
-        { name: "Gold Royalty Club Membership (6 Months)", qty: 1, price: 12999 },
-      ],
-      subtotal: 12999,
-      discount: 0,
-      tax: 2339,
-      total: 15338,
-      status: "paid",
-      paymentMethod: "Credit Card (Visa **8821)",
-      stylist: "Concierge Desk",
-    },
-    {
-      id: "INV-2026-5120",
-      date: "Jun 05, 2026",
-      branchName: "Atelier Mumbai Flagship",
-      services: [
-        { name: "Keratin Smooth & Deep Conditioning", qty: 1, price: 6500 },
-      ],
-      subtotal: 6500,
-      discount: 650,
-      tax: 1053,
-      total: 6903,
-      status: "paid",
-      paymentMethod: "Salon Cash Wallet",
-      stylist: "Zara Chen (Director)",
-    },
-  ];
+  // Invoices are loaded from the backend; empty until API returns data
+  const invoices: Array<{
+    id: string;
+    date: string;
+    branchName: string;
+    services: { name: string; qty: number; price: number }[];
+    subtotal: number;
+    discount: number;
+    tax: number;
+    total: number;
+    status: string;
+    paymentMethod: string;
+    stylist: string;
+  }> = [];
 
   const filteredInvoices = invoices.filter(
     (inv) =>
       inv.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      inv.services.some((s) => s.name.toLowerCase().includes(searchQuery.toLowerCase()))
+      inv.services.some((s) =>
+        s.name.toLowerCase().includes(searchQuery.toLowerCase())
+      )
   );
 
   const handleDownloadPDF = (id: string) => {
@@ -109,11 +56,11 @@ export function CustomerInvoicesView() {
         <div className="relative z-10 max-w-2xl space-y-2">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-semibold uppercase tracking-wider">
             <FileText className="w-3.5 h-3.5 text-teal-200" />
-            <span>Digital Receipts & Tax Filing</span>
+            <span>Digital Receipts &amp; Tax Filing</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Invoices & Service Receipts</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">Invoices &amp; Service Receipts</h1>
           <p className="text-teal-100 text-xs sm:text-sm">
-            Access itemized GST receipts, treatments history, and payment statements.
+            Access itemized GST receipts, treatment history, and payment statements.
           </p>
         </div>
       </div>
@@ -136,60 +83,72 @@ export function CustomerInvoicesView() {
           </span>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="border-b border-slate-100 text-slate-400 font-semibold uppercase tracking-wider">
-                <th className="py-3 px-4">Invoice ID</th>
-                <th className="py-3 px-4">Date</th>
-                <th className="py-3 px-4">Services / Treatments</th>
-                <th className="py-3 px-4">Stylist</th>
-                <th className="py-3 px-4">Payment Mode</th>
-                <th className="py-3 px-4">Total Amount</th>
-                <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredInvoices.map((inv) => (
-                <tr key={inv.id} className="hover:bg-slate-50/70 transition-colors">
-                  <td className="py-3.5 px-4 font-mono font-bold text-slate-900">{inv.id}</td>
-                  <td className="py-3.5 px-4 text-slate-500">{inv.date}</td>
-                  <td className="py-3.5 px-4 font-medium text-slate-800 max-w-xs truncate">
-                    {inv.services.map((s) => s.name).join(", ")}
-                  </td>
-                  <td className="py-3.5 px-4 text-slate-600">{inv.stylist}</td>
-                  <td className="py-3.5 px-4 text-slate-600">{inv.paymentMethod}</td>
-                  <td className="py-3.5 px-4 font-bold text-slate-900 font-mono">
-                    ₹{inv.total.toLocaleString()}
-                  </td>
-                  <td className="py-3.5 px-4">
-                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
-                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                      PAID
-                    </span>
-                  </td>
-                  <td className="py-3.5 px-4 text-right space-x-2">
-                    <button
-                      onClick={() => setSelectedInvoice(inv)}
-                      className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 cursor-pointer inline-flex items-center gap-1 text-[11px] font-semibold"
-                    >
-                      <Eye className="w-3.5 h-3.5 text-indigo-600" />
-                      <span>View</span>
-                    </button>
-                    <button
-                      onClick={() => handleDownloadPDF(inv.id)}
-                      className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 cursor-pointer inline-flex items-center gap-1 text-[11px] font-semibold"
-                    >
-                      <Download className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>PDF</span>
-                    </button>
-                  </td>
+        {filteredInvoices.length === 0 ? (
+          <div className="py-16 text-center space-y-3">
+            <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto">
+              <Receipt className="w-7 h-7 text-slate-400" />
+            </div>
+            <p className="text-slate-500 text-sm font-medium">No invoices yet</p>
+            <p className="text-slate-400 text-xs max-w-xs mx-auto">
+              Your service receipts and GST invoices will appear here after your first visit.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-slate-100 text-slate-400 font-semibold uppercase tracking-wider">
+                  <th className="py-3 px-4">Invoice ID</th>
+                  <th className="py-3 px-4">Date</th>
+                  <th className="py-3 px-4">Services / Treatments</th>
+                  <th className="py-3 px-4">Stylist</th>
+                  <th className="py-3 px-4">Payment Mode</th>
+                  <th className="py-3 px-4">Total Amount</th>
+                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredInvoices.map((inv) => (
+                  <tr key={inv.id} className="hover:bg-slate-50/70 transition-colors">
+                    <td className="py-3.5 px-4 font-mono font-bold text-slate-900">{inv.id}</td>
+                    <td className="py-3.5 px-4 text-slate-500">{inv.date}</td>
+                    <td className="py-3.5 px-4 font-medium text-slate-800 max-w-xs truncate">
+                      {inv.services.map((s) => s.name).join(", ")}
+                    </td>
+                    <td className="py-3.5 px-4 text-slate-600">{inv.stylist}</td>
+                    <td className="py-3.5 px-4 text-slate-600">{inv.paymentMethod}</td>
+                    <td className="py-3.5 px-4 font-bold text-slate-900 font-mono">
+                      ₹{inv.total.toLocaleString()}
+                    </td>
+                    <td className="py-3.5 px-4">
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        PAID
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-4 text-right space-x-2">
+                      <button
+                        onClick={() => setSelectedInvoice(inv)}
+                        className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 cursor-pointer inline-flex items-center gap-1 text-[11px] font-semibold"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>View</span>
+                      </button>
+                      <button
+                        onClick={() => handleDownloadPDF(inv.id)}
+                        className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 cursor-pointer inline-flex items-center gap-1 text-[11px] font-semibold"
+                      >
+                        <Download className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>PDF</span>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Tax Invoice Modal */}
@@ -200,15 +159,15 @@ export function CustomerInvoicesView() {
             <div className="flex items-start justify-between border-b border-slate-100 pb-4">
               <div>
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center text-white font-bold text-sm">
-                    LM
+                  <div className="w-8 h-8 rounded-lg bg-teal-600 flex items-center justify-center text-white font-bold text-sm">
+                    <Receipt className="w-4 h-4" />
                   </div>
                   <span className="font-bold text-lg text-slate-900">
-                    LAZYMONKEY<span className="text-amber-500 font-sans text-xs">AI</span> SALON
+                    {selectedBranch?.name || "Salon"} Invoice
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Official GST Tax Invoice &bull; GSTIN: 27AABCL8891C1Z4
+                  Official GST Tax Invoice &bull; {selectedInvoice.branchName}
                 </p>
               </div>
               <button
@@ -270,7 +229,7 @@ export function CustomerInvoicesView() {
               </div>
               {selectedInvoice.discount > 0 && (
                 <div className="flex justify-between text-emerald-600">
-                  <span>VIP Member Discount:</span>
+                  <span>Member Discount:</span>
                   <span className="font-mono">-₹{selectedInvoice.discount.toLocaleString()}</span>
                 </div>
               )}

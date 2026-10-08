@@ -142,7 +142,7 @@ export function CustomerPaymentView() {
                   <Scissors className="w-4 h-4 text-indigo-500" />
                   <span>Itemized Salon Services & Retail ({activeItems.length})</span>
                 </h3>
-                <span className="text-xs text-slate-500">Atelier Mumbai Flagship</span>
+                <span className="text-xs text-slate-500">{selectedBranch?.name || "Your Salon"}</span>
               </div>
 
               <div className="divide-y divide-slate-100">

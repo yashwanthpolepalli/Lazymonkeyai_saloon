@@ -1,18 +1,78 @@
 /**
- * CSV and Excel Data Import / Export Utilities
- * Provides sample CSV templates, robust parsing, validation, and browser downloads.
+ * CSV, JSONL and JSON Data Import / Export Utilities
+ * Handles: CSV, JSONL (one JSON object per line), plain JSON array, plain JSON object with array root key.
+ * All cell values in ParsedCsvResult rows are ALWAYS primitives (string | number | boolean) — never objects —
+ * so they are always safe to render directly in React table cells.
  */
 
-export interface ParsedCsvResult<T = Record<string, string>> {
+export interface ParsedCsvResult<T = Record<string, any>> {
   headers: string[];
   rows: T[];
   errors: string[];
   totalRows: number;
+  detectedFormat: "csv" | "jsonl" | "json-array" | "json-object" | "unknown";
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Recursively flattens a nested object into a single-level map using dot-notation keys.
+ * Arrays of primitives become comma-joined strings. Arrays of objects become JSON strings.
+ * This ensures NO nested object ever reaches a React render cell.
+ */
+function flattenObject(
+  obj: Record<string, any>,
+  prefix = "",
+  depth = 0
+): Record<string, string | number | boolean> {
+  const result: Record<string, string | number | boolean> = {};
+  if (depth > 4) {
+    return { [prefix || "value"]: JSON.stringify(obj) };
+  }
+
+  for (const key of Object.keys(obj)) {
+    const fullKey = prefix ? `${prefix}.${key}` : key;
+    const val = obj[key];
+
+    if (val === null || val === undefined) {
+      result[fullKey] = "";
+    } else if (typeof val === "object" && !Array.isArray(val)) {
+      Object.assign(result, flattenObject(val, fullKey, depth + 1));
+    } else if (Array.isArray(val)) {
+      if (val.every((v) => typeof v !== "object")) {
+        result[fullKey] = val.join(", ");
+      } else {
+        result[fullKey] = JSON.stringify(val);
+      }
+    } else {
+      result[fullKey] = val as string | number | boolean;
+    }
+  }
+  return result;
 }
 
 /**
- * Downloads a string content as a CSV file with UTF-8 BOM so Excel opens it correctly.
+ * Coerce any value to a primitive safe for React rendering.
  */
+function toPrimitive(val: any): string | number | boolean {
+  if (val === null || val === undefined) return "";
+  if (typeof val === "object") {
+    if (Array.isArray(val)) {
+      if (val.every((v) => typeof v !== "object")) return val.join(", ");
+      return JSON.stringify(val);
+    }
+    return JSON.stringify(val);
+  }
+  return val as string | number | boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Downloads
+// ---------------------------------------------------------------------------
+
+/** Downloads a string as a CSV file with UTF-8 BOM (so Excel opens it cleanly). */
 export function downloadCsvFile(filename: string, csvContent: string) {
   const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
@@ -25,16 +85,204 @@ export function downloadCsvFile(filename: string, csvContent: string) {
   URL.revokeObjectURL(url);
 }
 
+/** Downloads a string as a JSONL (JSON Lines) file. */
+export function downloadJsonlFile(filename: string, jsonlContent: string) {
+  const blob = new Blob([jsonlContent], { type: "application/x-ndjson;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", filename.endsWith(".jsonl") ? filename : `${filename}.jsonl`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+// ---------------------------------------------------------------------------
+// Parsers
+// ---------------------------------------------------------------------------
+
 /**
- * Parse CSV text into headers and structured row objects
+ * Parse JSONL (JSON Lines) — one JSON object per line.
+ * If the whole text is a valid JSON array, delegates to parseJsonArrayText.
+ */
+export function parseJsonlText(jsonlText: string): ParsedCsvResult {
+  const errors: string[] = [];
+  if (!jsonlText || !jsonlText.trim()) {
+    return { headers: [], rows: [], errors: ["File is empty"], totalRows: 0, detectedFormat: "jsonl" };
+  }
+
+  const trimmed = jsonlText.trim();
+
+  // A .jsonl file given a JSON array content → delegate
+  if (trimmed.startsWith("[")) {
+    return parseJsonArrayText(trimmed);
+  }
+
+  const lines = trimmed.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const rows: Record<string, string | number | boolean>[] = [];
+  const headerSet = new Set<string>();
+
+  lines.forEach((line, index) => {
+    try {
+      const parsed = JSON.parse(line);
+      if (Array.isArray(parsed)) {
+        parsed.forEach((item) => {
+          if (typeof item === "object" && item !== null) {
+            const flat = flattenObject(item);
+            rows.push(flat);
+            Object.keys(flat).forEach((k) => headerSet.add(k));
+          }
+        });
+      } else if (typeof parsed === "object" && parsed !== null) {
+        const flat = flattenObject(parsed);
+        rows.push(flat);
+        Object.keys(flat).forEach((k) => headerSet.add(k));
+      } else {
+        if (index < 5) errors.push(`Line ${index + 1}: Not a JSON object, skipped.`);
+      }
+    } catch (e: any) {
+      if (index < 5) {
+        errors.push(`Line ${index + 1}: Invalid JSON — ${e?.message || "parse error"}`);
+      }
+    }
+  });
+
+  return {
+    headers: Array.from(headerSet),
+    rows,
+    errors,
+    totalRows: rows.length,
+    detectedFormat: "jsonl",
+  };
+}
+
+/**
+ * Parse a plain JSON file. Handles:
+ *  - JSON array:   [{...}, {...}]
+ *  - JSON object with a root array key: { "data": [...] }
+ *  - Single JSON object: {...}  → treated as 1-row table
+ * Deeply flattens nested objects so every cell value is a safe primitive.
+ */
+export function parseJsonArrayText(jsonText: string): ParsedCsvResult {
+  const errors: string[] = [];
+  try {
+    const parsed = JSON.parse(jsonText.trim());
+
+    let arr: any[] = [];
+    let fmt: ParsedCsvResult["detectedFormat"] = "json-array";
+
+    if (Array.isArray(parsed)) {
+      arr = parsed;
+    } else if (typeof parsed === "object" && parsed !== null) {
+      fmt = "json-object";
+      // Try well-known root array keys first
+      const ARRAY_KEYS = [
+        "data", "items", "results", "records", "rows",
+        "services", "customers", "inventory", "employees", "staff",
+        "products", "appointments", "invoices", "orders",
+      ];
+      for (const key of ARRAY_KEYS) {
+        if (Array.isArray(parsed[key])) {
+          arr = parsed[key];
+          break;
+        }
+      }
+      if (arr.length === 0) {
+        // Try first array-valued key found
+        for (const key of Object.keys(parsed)) {
+          if (Array.isArray(parsed[key]) && (parsed[key] as any[]).length > 0) {
+            arr = parsed[key];
+            break;
+          }
+        }
+      }
+      if (arr.length === 0) {
+        // Single JSON object → treat as one-row table
+        arr = [parsed];
+      }
+    }
+
+    if (arr.length === 0) {
+      return { headers: [], rows: [], errors: ["JSON file contains an empty array."], totalRows: 0, detectedFormat: fmt };
+    }
+
+    const headerSet = new Set<string>();
+    const rows: Record<string, string | number | boolean>[] = arr.map((item) => {
+      if (typeof item !== "object" || item === null) {
+        return { value: toPrimitive(item) };
+      }
+      const flat = flattenObject(item);
+      Object.keys(flat).forEach((k) => headerSet.add(k));
+      return flat;
+    });
+
+    return { headers: Array.from(headerSet), rows, errors, totalRows: rows.length, detectedFormat: fmt };
+  } catch (e: any) {
+    errors.push(`JSON parse failed: ${e?.message || "invalid JSON"}`);
+    return { headers: [], rows: [], errors, totalRows: 0, detectedFormat: "json-array" };
+  }
+}
+
+/**
+ * Universal Parser — auto-detects format from file extension AND content.
+ *
+ * Priority:
+ *   1. .jsonl / .ndjson  → JSONL parser
+ *   2. .json             → JSON parser (handles arrays AND objects with root key unwrapping)
+ *   3. Content starts with '[' → JSON array parser
+ *   4. Content starts with '{' → Try full JSON parse; if ok → JSON parser; if not → JSONL
+ *   5. Everything else → CSV parser
+ */
+export function parseUniversalText(text: string, filename?: string): ParsedCsvResult {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return { headers: [], rows: [], errors: ["File is empty"], totalRows: 0, detectedFormat: "unknown" };
+  }
+
+  const lower = (filename || "").toLowerCase();
+  const isJsonlExt = lower.endsWith(".jsonl") || lower.endsWith(".ndjson");
+  const isJsonExt = lower.endsWith(".json");
+
+  if (isJsonlExt) {
+    return parseJsonlText(trimmed);
+  }
+
+  if (isJsonExt) {
+    return parseJsonArrayText(trimmed);
+  }
+
+  // Content-based detection
+  if (trimmed.startsWith("[")) {
+    return parseJsonArrayText(trimmed);
+  }
+
+  if (trimmed.startsWith("{")) {
+    // Try parsing the whole thing as one JSON value
+    try {
+      JSON.parse(trimmed);
+      // Succeeded → it's either a single object or the file is valid JSON
+      return parseJsonArrayText(trimmed);
+    } catch {
+      // Invalid as a single JSON doc → multi-line JSONL stream
+      return parseJsonlText(trimmed);
+    }
+  }
+
+  return parseCsvText(trimmed);
+}
+
+/**
+ * Parse CSV text into headers and structured row objects.
+ * Respects quoted fields with embedded commas/newlines.
+ * All values are plain strings — never objects.
  */
 export function parseCsvText(csvText: string): ParsedCsvResult {
   const errors: string[] = [];
   if (!csvText || !csvText.trim()) {
-    return { headers: [], rows: [], errors: ["File is empty"], totalRows: 0 };
+    return { headers: [], rows: [], errors: ["File is empty"], totalRows: 0, detectedFormat: "csv" };
   }
 
-  // Split lines while preserving quotes
   const lines: string[] = [];
   let currentLine = "";
   let inQuotes = false;
@@ -42,29 +290,18 @@ export function parseCsvText(csvText: string): ParsedCsvResult {
   for (let i = 0; i < csvText.length; i++) {
     const char = csvText[i];
     const nextChar = csvText[i + 1];
-
     if (char === '"') {
-      if (inQuotes && nextChar === '"') {
-        currentLine += '"';
-        i++; // skip escaped quote
-      } else {
-        inQuotes = !inQuotes;
-      }
+      if (inQuotes && nextChar === '"') { currentLine += '"'; i++; }
+      else { inQuotes = !inQuotes; }
     } else if ((char === "\r" || char === "\n") && !inQuotes) {
-      if (char === "\r" && nextChar === "\n") {
-        i++;
-      }
-      if (currentLine.trim()) {
-        lines.push(currentLine);
-      }
+      if (char === "\r" && nextChar === "\n") i++;
+      if (currentLine.trim()) lines.push(currentLine);
       currentLine = "";
     } else {
       currentLine += char;
     }
   }
-  if (currentLine.trim()) {
-    lines.push(currentLine);
-  }
+  if (currentLine.trim()) lines.push(currentLine);
 
   if (lines.length < 2) {
     return {
@@ -72,26 +309,20 @@ export function parseCsvText(csvText: string): ParsedCsvResult {
       rows: [],
       errors: ["CSV must contain at least a header row and one data row"],
       totalRows: 0,
+      detectedFormat: "csv",
     };
   }
 
-  // Parse header
   const parseRow = (line: string): string[] => {
     const values: string[] = [];
     let curVal = "";
     let inside = false;
-
     for (let i = 0; i < line.length; i++) {
       const c = line[i];
       const next = line[i + 1];
-
       if (c === '"') {
-        if (inside && next === '"') {
-          curVal += '"';
-          i++;
-        } else {
-          inside = !inside;
-        }
+        if (inside && next === '"') { curVal += '"'; i++; }
+        else { inside = !inside; }
       } else if (c === "," && !inside) {
         values.push(curVal.trim());
         curVal = "";
@@ -104,8 +335,7 @@ export function parseCsvText(csvText: string): ParsedCsvResult {
   };
 
   const rawHeaders = parseRow(lines[0]);
-  const headers = rawHeaders.map((h) => h.replace(/^["']|["']$/g, "").trim());
-
+  const headers = rawHeaders.map((h) => h.replace(/^[\"']|[\"']$/g, "").trim());
   const rows: Record<string, string>[] = [];
 
   for (let i = 1; i < lines.length; i++) {
@@ -113,135 +343,36 @@ export function parseCsvText(csvText: string): ParsedCsvResult {
     if (!line.trim()) continue;
     const values = parseRow(line);
     const rowObj: Record<string, string> = {};
-
     headers.forEach((header, index) => {
       let val = values[index] !== undefined ? values[index] : "";
-      val = val.replace(/^["']|["']$/g, "").trim();
+      val = val.replace(/^[\"']|[\"']$/g, "").trim();
       rowObj[header] = val;
     });
-
     rows.push(rowObj);
   }
 
-  return {
-    headers,
-    rows,
-    errors,
-    totalRows: rows.length,
-  };
+  return { headers, rows, errors, totalRows: rows.length, detectedFormat: "csv" };
 }
 
-/// ==========================================
-// SAMPLE CSV / EXCEL TEMPLATES (12 Master Categories)
-// ==========================================
+// ---------------------------------------------------------------------------
+// Schema Templates
+// ---------------------------------------------------------------------------
 
 export const SAMPLE_SERVICES_CSV = `Service Name,Category,Subcategory,Base Price (INR),VIP Member Price (INR),Duration (Minutes),Audience,Description,Image URL
-"Architectural Precision Haircut & Blowdry","Hair","Haircut",900,720,45,"women, men, kids, unisex","Custom consultation, clarifying wash, bespoke geometry cut, and blowout finishing.","https://images.unsplash.com/photo-1560869713-7d0a29430803?w=800"
-"French Dimensional Sun-Kissed Balayage","Hair","Balayage",6500,5200,150,"women, unisex","Hand-swept gradient color illumination with seamless root blending and gloss seal.","https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=800"
-"Amazonian Bio-Keratin & Botox Infusion","Hair","Keratin Treatment",5500,4400,120,"women, men, unisex","Formaldehyde-free intensive smoothing, frizz elimination, and silk mirror gloss.","https://images.unsplash.com/photo-1527799820374-dcf8d9d4a388?w=800"
-"Royal Beard Sculpting & Razor Edge Line","Beard & Grooming","Beard Styling",550,440,30,"men","Sandalwood pre-oil, warm towel steam, scissor shaping, and straight-razor crisp lines.","https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800"
-"Hot Towel Executive Shave & Skin Detox","Beard & Grooming","Shaving",450,360,25,"men","Double lather rich shaving cream, hot eucalyptus towel, and post-shave balm.","https://images.unsplash.com/photo-1599351431202-1e0f0137899a?w=800"
-"Medical-Grade 7-in-1 Hydra Facial Infusion","Facial & Skin","Facial",3200,2560,60,"women, men, unisex","Vortex vacuum pore extraction, salicylic peeling, and antioxidant peptide serum blast.","https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=800"
-"24K Sovereign Pure Gold Glow Facial","Facial & Skin","Facial",4200,3360,75,"women, men, unisex","Ultrasonic cleansing, 24K pure gold leaf mask, and collagen LED phototherapy.","https://images.unsplash.com/photo-1512290900672-1f486ccf42b3?w=800"
-"High-Definition Organic Cotton Eyebrow Architecture","Threading","Eyebrows",150,120,15,"women, unisex","Precision mapping, high-definition symmetry shaping, and soothing aloe gel finish.","https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=800"
-"Italian Rica Lipo-Soluble Luxury Full Body Wax","Waxing","Full Body",2800,2240,75,"women","Colophony-free Italian liposoluble wax with pre-wax gel and avocado soothing lotion.","https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=800"
-"Haute Russian Structured BIAB Manicure","Nails","Manicure",1800,1440,60,"women, men, unisex","Flawless dry e-file precision cuticle detailing with durable BIAB rubber base overlay.","https://images.unsplash.com/photo-1632345031435-8727f6897d53?w=800"
-"Balinese Deep Tissue & Aromatic Oil Therapy","Spa & Massage","Deep Tissue Massage",3200,2560,60,"women, men, unisex","Acupressure thumb-walking, muscle knot release, and warm organic almond herbal elixir.","https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=800"
-"HD Glam Party & Cocktail Makeover","Makeup","Party Makeup",3800,3040,75,"women","Skin prep, flawless HD contouring, smokey / shimmer eye glam, and mink lashes.","https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?w=800"
-"Royal Heritage Signature Bridal Makeover","Bridal","Bridal Makeup",15000,12000,180,"women","Luxury HD bridal makeup, bespoke floral hairstyling, dupatta draping, and jewelry setting.","https://images.unsplash.com/photo-1519741497674-611481863552?w=800"
-"Intricate Rajasthani Organic Bridal Henna","Mehendi","Bridal Mehendi",7000,5600,180,"women","Custom love story portrait motifs, full elbows to fingertips, and feet mehendi.","https://images.unsplash.com/photo-1595867818088-57c2c9d2ec0a?w=800"
-"Full Body Walnut Scrub & Glow Polishing","Body Care","Body Polish",3500,2800,75,"women, men, unisex","Exfoliating micro-walnut bead scrub followed by warm cocoa butter body glaze.","https://images.unsplash.com/photo-1515377905703-c4788e51af15?w=800"
-"Triple-Wavelength Painless Laser Underarms Session","Hair Removal","Underarms",1999,1599,20,"women, men, unisex","Medical Diode & Alexandrite laser with ICE contact cooling for permanent reduction.","https://images.unsplash.com/photo-1560750588-73207b1ef5b8?w=800"`;
+"Sample Haircut & Style","Hair Couture & Styling","Haircut",1200,960,45,"unisex","Precision styling consultation and service.",""`;
 
 export const SAMPLE_CUSTOMERS_CSV = `Full Name,Phone Number,Email Address,Gender,Membership Tier,Wallet Balance (INR),Loyalty Points,Segment,Notes
-"Ananya Deshmukh","+91 98200 45678","ananya.deshmukh@gmail.com","female","Black Diamond VIP",12500,850,"VIP High Spender","Prefers chilled sparkling water and Director Stylist for balayage."
-"Vikramaditya Singhania","+91 98111 23456","vikram.singhania@corp.in","male","Gold Elite",6000,420,"Regular Loyalist","Executive cuts only on Saturday mornings. Espresso with almond milk."
-"Pooja Merchant","+91 99300 78901","pooja.merchant@fashion.co","female","Rose Silver",2000,150,"Regular Loyalist","Sensitive scalp. Always use sulfate-free organic shampoo."
-"Rohan Kulkarni","+91 97690 12345","rohan.kulkarni@techindia.io","male","Rose Silver",0,80,"Occasional","Walk-in customer for grooming and beard shaping."
-"Meera Kapoor","+91 98205 99887","meera.kapoor@lifestyle.net","female","Black Diamond VIP",25000,1400,"VIP High Spender","Celebrity client. Book private VIP styling suite BOM-01."
-"Aditi Rao","+91 98450 11223","aditi.rao@gmail.com","female","Gold Elite",4500,320,"Regular Loyalist","Booked monthly nail art and cellular gold facials."`;
+"Sample Client","+91 98000 00001","client@example.com","female","Standard",0,100,"Regular Loyalist",""`;
 
 export const SAMPLE_INVENTORY_CSV = `SKU,Product Name,Brand,Category,Unit,Cost Price (INR),Retail Price (INR),Current Stock,Reorder Level,Supplier
-"SKU-OLP-001","Olaplex No. 3 Hair Perfector 250ml","Olaplex Paris","Hair Care","bottles",1800,2950,45,10,"Olaplex India Official"
-"SKU-KER-002","Kerastase Chronologiste Masque 200ml","Kerastase Paris","Hair Care","tubes",2200,3600,28,8,"L'Oreal Luxe Distribution"
-"SKU-DY-003","L'Oreal Majirel Cool Inforced 7.1","L'Oreal Professionnel","Colorants","tubes",420,680,85,20,"L'Oreal Salon Direct"
-"SKU-SK-004","Forest Essentials Soundarya 24K Serum","Forest Essentials","Skin Care","bottles",2400,4200,18,5,"Forest Essentials B2B"
-"SKU-NL-005","OPI Infinite Shine Gel Effects Top Coat","OPI Nails USA","Nail Polish","bottles",650,1150,52,15,"OPI Beauty Imports"
-"SKU-SPA-006","Kama Ayurveda Pure Cedarwood Essential Oil","Kama Ayurveda","Spa Oils","bottles",780,1450,30,8,"Kama Ayurveda Wholesale"
-"SKU-TL-007","Dyson Supersonic Professional Dryer Nozzle","Dyson Pro","Styling Tools","units",3200,5500,12,3,"Dyson Commercial India"`;
+"SKU-PROD-001","Sample Hair Serum 100ml","Professional","Hair Care","bottles",500,950,20,5,"Default Supplier"`;
 
-// Pre-packaged demo data for 1-click test dump across 12 Master Categories
-export const DEMO_DUMP_SERVICES = [
-  {
-    name: "Architectural Precision Haircut & Blowdry",
-    categoryName: "Hair",
-    categoryId: "cat_hair",
-    subcategory: "Haircut",
-    basePrice: 900,
-    memberPrice: 720,
-    durationMinutes: 45,
-    gender: ["women", "men", "kids", "unisex"] as any,
-    shortDesc: "Custom consultation, clarifying wash, bespoke geometry cut, and blowout finishing.",
-    image: "https://images.unsplash.com/photo-1560869713-7d0a29430803?auto=format&fit=crop&q=80&w=400",
-  },
-  {
-    name: "French Dimensional Sun-Kissed Balayage",
-    categoryName: "Hair",
-    categoryId: "cat_hair",
-    subcategory: "Balayage",
-    basePrice: 6500,
-    memberPrice: 5200,
-    durationMinutes: 150,
-    gender: ["women", "unisex"] as any,
-    shortDesc: "Hand-swept gradient color illumination with seamless root blending and gloss seal.",
-    image: "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&q=80&w=400",
-  },
-  {
-    name: "Haute Russian Structured BIAB Manicure",
-    categoryName: "Nails",
-    categoryId: "cat_nails",
-    subcategory: "Manicure",
-    basePrice: 1800,
-    memberPrice: 1440,
-    durationMinutes: 60,
-    gender: ["women", "men", "unisex"] as any,
-    shortDesc: "Flawless dry e-file precision cuticle detailing with durable BIAB rubber base overlay.",
-    image: "https://images.unsplash.com/photo-1604654894610-df63bc536371?auto=format&fit=crop&w=400",
-  },
-  {
-    name: "Balinese Deep Tissue & Aromatic Oil Therapy",
-    categoryName: "Spa & Massage",
-    categoryId: "cat_spa",
-    subcategory: "Deep Tissue Massage",
-    basePrice: 3200,
-    memberPrice: 2560,
-    durationMinutes: 60,
-    gender: ["women", "men", "unisex"] as any,
-    shortDesc: "Acupressure thumb-walking, muscle knot release, and warm organic almond herbal elixir.",
-    image: "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&w=400",
-  },
-  {
-    name: "HD Glam Party & Cocktail Makeover",
-    categoryName: "Makeup",
-    categoryId: "cat_makeup",
-    subcategory: "Party Makeup",
-    basePrice: 3800,
-    memberPrice: 3040,
-    durationMinutes: 75,
-    gender: ["women"] as any,
-    shortDesc: "Skin prep, flawless HD contouring, smokey / shimmer eye glam, and mink lashes.",
-    image: "https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?auto=format&fit=crop&w=400",
-  },
-  {
-    name: "Royal Heritage Signature Bridal Makeover",
-    categoryName: "Bridal",
-    categoryId: "cat_bridal",
-    subcategory: "Bridal Makeup",
-    basePrice: 15000,
-    memberPrice: 12000,
-    durationMinutes: 180,
-    gender: ["women"] as any,
-    shortDesc: "Luxury HD bridal makeup, bespoke floral hairstyling, dupatta draping, and jewelry setting.",
-    image: "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=400",
-  },
-];
+export const SAMPLE_SERVICES_JSONL = `{"name": "Sample Haircut & Style", "category": "Hair Couture & Styling", "base_price": 1200, "duration": 45, "gender": "unisex", "short_desc": "Precision styling consultation and service."}`;
+
+export const SAMPLE_CUSTOMERS_JSONL = `{"name": "Sample Client", "phone": "+91 98000 00001", "email": "client@example.com", "membership_tier": "Standard", "wallet_balance": 0, "loyalty_points": 100, "segment": "Regular Loyalist"}`;
+
+export const SAMPLE_INVENTORY_JSONL = `{"sku": "SKU-PROD-001", "name": "Sample Hair Serum 100ml", "brand": "Professional", "category": "Hair Care", "unit": "bottles", "cost_price": 500, "retail_price": 950, "current_stock": 20}`;
+
+// Empty placeholder for dynamic data ingestion
+export const DEMO_DUMP_SERVICES: any[] = [];
+

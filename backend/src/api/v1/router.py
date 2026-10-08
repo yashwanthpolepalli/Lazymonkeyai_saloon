@@ -15,6 +15,10 @@ from src.api.v1.system_settings import router as settings_router
 from src.api.v1.organizations import router as organizations_router
 from src.api.v1.stations import router as stations_router
 from src.api.v1.calendar_sync import router as calendar_sync_router
+from src.api.v1.master_catalog import router as master_catalog_router
+from src.api.v1.bulk_import import router as bulk_import_router
+from src.api.v1.onboarding import router as onboarding_router
+from src.api.v1.plans import router as plans_router
 
 # CRM Sub-Routers
 
@@ -70,6 +74,10 @@ api_v1_router.include_router(settings_router)
 api_v1_router.include_router(organizations_router)
 api_v1_router.include_router(stations_router)
 api_v1_router.include_router(calendar_sync_router)
+api_v1_router.include_router(master_catalog_router)
+api_v1_router.include_router(bulk_import_router)
+api_v1_router.include_router(onboarding_router)  # Super Admin owner onboarding
+api_v1_router.include_router(plans_router)       # Super Admin subscription plans
 
 # Include CRM Routers
 
