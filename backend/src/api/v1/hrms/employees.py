@@ -27,31 +27,15 @@ def create_employee(payload: EmployeeCreate, db: Session = Depends(get_db)):
     data = payload.model_dump()
     data["code"] = payload.code or generate_employee_code("SAL", emp_count)
     
-    # Ensure branch_id is valid in branches table
+    # Validate branch_id exists in database
     from src.models.salon import Branch
-    target_branch = db.query(Branch).filter(Branch.id == payload.branch_id).first()
-    if not target_branch:
-        first_branch = db.query(Branch).first()
-        if first_branch:
-            data["branch_id"] = first_branch.id
-        else:
-            default_branch = Branch(
-                id=payload.branch_id or "branch_01",
-                name="Main Flagship Studio",
-                code="BR-001",
-                city="Bangalore",
-                state="Karnataka",
-                country="India",
-                currency="INR",
-                address="100 Feet Road, Indiranagar",
-                phone="+919800000000",
-                whatsapp="+919800000000",
-                email="flagship@saloon.com",
-                is_active=True
-            )
-            db.add(default_branch)
-            db.commit()
-            data["branch_id"] = default_branch.id
+    branch = db.query(Branch).filter(Branch.id == payload.branch_id).first()
+    if not branch:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Branch with ID '{payload.branch_id}' does not exist"
+        )
+    data["branch_id"] = branch.id
 
     emp = Employee(**data)
     db.add(emp)
@@ -67,8 +51,8 @@ def create_employee(payload: EmployeeCreate, db: Session = Depends(get_db)):
             email=payload.email,
             phone=payload.phone,
             role="branch_manager" if "manager" in (payload.role or "").lower() else "staff",
-            organization_id=payload.branch_id if hasattr(payload, "organization_id") else None,
-            branch_id=payload.branch_id,
+            organization_id=getattr(payload, "organization_id", None) or branch.organization_id,
+            branch_id=branch.id,
             department=payload.department,
         )
     except Exception as err:
@@ -96,12 +80,68 @@ def update_employee(employee_id: str, payload: EmployeeUpdate, db: Session = Dep
     db.refresh(emp)
     return emp
 
-@router.delete("/{employee_id}", status_code=status.HTTP_204_NO_CONTENT)
+from pydantic import BaseModel
+
+class BulkDeleteEmployeesRequest(BaseModel):
+    employee_ids: List[str]
+
+@router.post("/bulk-delete")
+def bulk_delete_employees(payload: BulkDeleteEmployeesRequest, db: Session = Depends(get_db)):
+    if not payload.employee_ids:
+        return {"success": True, "deleted_count": 0, "deleted_ids": []}
+
+    from src.models.erp import User
+    deleted_ids = []
+    for emp_id in payload.employee_ids:
+        emp = db.query(Employee).filter(Employee.id == emp_id).first()
+        if not emp:
+            continue
+
+        if emp.email:
+            user = db.query(User).filter(User.email == emp.email, User.role != "super_admin").first()
+            if user:
+                try:
+                    db.delete(user)
+                except Exception:
+                    user.is_active = False
+
+        try:
+            db.delete(emp)
+            db.commit()
+            deleted_ids.append(emp_id)
+        except Exception:
+            db.rollback()
+            emp = db.query(Employee).filter(Employee.id == emp_id).first()
+            if emp:
+                emp.is_active = False
+                db.commit()
+                deleted_ids.append(emp_id)
+
+    return {"success": True, "deleted_count": len(deleted_ids), "deleted_ids": deleted_ids}
+
+@router.delete("/{employee_id}")
 def delete_employee(employee_id: str, db: Session = Depends(get_db)):
     emp = db.query(Employee).filter(Employee.id == employee_id).first()
     if not emp:
         raise HTTPException(status_code=404, detail="Employee not found")
-    
-    emp.is_active = False
-    db.commit()
-    return None
+
+    if emp.email:
+        from src.models.erp import User
+        user = db.query(User).filter(User.email == emp.email, User.role != "super_admin").first()
+        if user:
+            try:
+                db.delete(user)
+            except Exception:
+                user.is_active = False
+
+    try:
+        db.delete(emp)
+        db.commit()
+    except Exception:
+        db.rollback()
+        emp = db.query(Employee).filter(Employee.id == employee_id).first()
+        if emp:
+            emp.is_active = False
+            db.commit()
+
+    return {"success": True, "message": "Employee deleted successfully", "id": employee_id}

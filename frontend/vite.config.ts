@@ -21,6 +21,10 @@ export default defineConfig({
       "framer-motion",
       "clsx",
       "tailwind-merge",
+      "@tanstack/react-table",
+      "recharts",
+      "date-fns",
+      "canvas-confetti",
     ],
   },
   server: {

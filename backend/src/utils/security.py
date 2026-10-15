@@ -1,20 +1,26 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Any, Union
 from jose import jwt, JWTError
-from passlib.context import CryptContext
+import bcrypt
 from src.core.config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verifies a plain-text password against a bcrypt hash."""
-    if not hashed_password:
+    """Verifies a plain-text password against a bcrypt hash safely."""
+    if not hashed_password or not plain_password:
         return False
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        pwd_bytes = plain_password.encode("utf-8")[:72]
+        hash_bytes = hashed_password.strip().encode("utf-8")
+        return bcrypt.checkpw(pwd_bytes, hash_bytes)
+    except Exception as e:
+        print(f"[Security] verify_password error: {e}")
+        return False
 
 def get_password_hash(password: str) -> str:
-    """Generates a secure bcrypt hash for a password."""
-    return pwd_context.hash(password)
+    """Generates a secure bcrypt hash for a password (truncated to 72 bytes as per bcrypt specification)."""
+    pwd_bytes = (password or "").encode("utf-8")[:72]
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(pwd_bytes, salt).decode("utf-8")
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """Creates a signed JWT access token with an expiration timestamp."""

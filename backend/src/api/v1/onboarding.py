@@ -155,9 +155,13 @@ def onboard_new_owner(req: OwnerOnboardRequest, db: Session = Depends(get_db)):
         )
 
     # 3. Create Owner User
+    clean_phone = req.owner_phone.strip() if req.owner_phone else None
+    org.email = owner_email
+    org.phone = clean_phone
+
     owner = User(
         email=owner_email,
-        phone=req.owner_phone.strip() if req.owner_phone else None,
+        phone=clean_phone,
         password_hash=get_password_hash(temp_password),
         name=req.owner_name.strip(),
         role="owner",

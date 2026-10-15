@@ -103,6 +103,73 @@ def update_customer(customer_id: str, payload: CustomerUpdate, db: Session = Dep
     db.refresh(customer)
     return customer
 
+
+from pydantic import BaseModel
+
+class BulkDeleteCustomersRequest(BaseModel):
+    customer_ids: List[str]
+
+@router.post("/bulk-delete")
+def bulk_delete_customers(payload: BulkDeleteCustomersRequest, db: Session = Depends(get_db)):
+    if not payload.customer_ids:
+        return {"success": True, "deleted_count": 0, "deleted_ids": []}
+
+    deleted_ids = []
+    from src.models.erp import User
+    for cid in payload.customer_ids:
+        customer = db.query(Customer).filter(Customer.id == cid).first()
+        if not customer:
+            continue
+        
+        if customer.email:
+            user = db.query(User).filter(User.email == customer.email, User.role == "customer").first()
+            if user:
+                try:
+                    db.delete(user)
+                except Exception:
+                    user.is_active = False
+
+        try:
+            db.delete(customer)
+            db.commit()
+            deleted_ids.append(cid)
+        except Exception:
+            db.rollback()
+            customer = db.query(Customer).filter(Customer.id == cid).first()
+            if customer:
+                customer.is_active = False
+                db.commit()
+                deleted_ids.append(cid)
+
+    return {"success": True, "deleted_count": len(deleted_ids), "deleted_ids": deleted_ids}
+
+@router.delete("/{customer_id}")
+def delete_customer(customer_id: str, db: Session = Depends(get_db)):
+    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not customer:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    
+    if customer.email:
+        from src.models.erp import User
+        user = db.query(User).filter(User.email == customer.email, User.role == "customer").first()
+        if user:
+            try:
+                db.delete(user)
+            except Exception:
+                user.is_active = False
+
+    try:
+        db.delete(customer)
+        db.commit()
+    except Exception:
+        db.rollback()
+        customer = db.query(Customer).filter(Customer.id == customer_id).first()
+        if customer:
+            customer.is_active = False
+            db.commit()
+
+    return {"success": True, "message": "Customer deleted successfully", "id": customer_id}
+
 # --- Wallet Sub-Endpoints mapped to frontend apiClient.ts ---
 wallet_router = APIRouter(prefix="/crm_modules/wallet", tags=["CRM - Wallet"])
 

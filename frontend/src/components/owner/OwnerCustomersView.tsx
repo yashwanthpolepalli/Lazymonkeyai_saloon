@@ -21,13 +21,17 @@ import {
   FileSpreadsheet,
   Download,
   Sparkles,
+  Trash2,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
 import { Customer } from "@/types";
 import { DataImportModal } from "@/components/common/DataImportModal";
 import { downloadCsvFile, SAMPLE_CUSTOMERS_CSV } from "@/lib/csvHelper";
+import { CRMService } from "@/services/apiClient";
 
 export function OwnerCustomersView() {
-  const { customers, addCustomer, addToast, setActiveModule, setActiveSubTab, setCurrentCustomer, selectedBranch } =
+  const { customers, setCustomers, addCustomer, addToast, setActiveModule, setActiveSubTab, setCurrentCustomer, selectedBranch } =
     useSalon();
 
   const [activeTab, setActiveTab] = useState<"directory" | "formulas" | "vouchers">("directory");
@@ -45,6 +49,65 @@ export function OwnerCustomersView() {
   const [email, setEmail] = useState("");
   const [membershipTier, setMembershipTier] = useState<"silver" | "gold" | "platinum" | "none">("gold");
   const [notes, setNotes] = useState("");
+
+  // Customer selection & deletion state
+  const [selectedCustomerIds, setSelectedCustomerIds] = useState<Set<string>>(new Set());
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+
+  const toggleSelectCustomer = (id: string) => {
+    setSelectedCustomerIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedCustomerIds.size === filteredCustomers.length && filteredCustomers.length > 0) {
+      setSelectedCustomerIds(new Set());
+    } else {
+      setSelectedCustomerIds(new Set(filteredCustomers.map((c) => c.id)));
+    }
+  };
+
+  const handleDeleteSingleCustomer = async (cust: Customer) => {
+    setIsDeleting(true);
+    try {
+      await CRMService.deleteCustomer(cust.id);
+      setCustomers((prev) => prev.filter((c) => c.id !== cust.id));
+      setSelectedCustomerIds((prev) => {
+        const next = new Set(prev);
+        next.delete(cust.id);
+        return next;
+      });
+      addToast("success", "Customer Deleted", `${cust.name} was removed from the database.`);
+    } catch (err: any) {
+      addToast("error", "Deletion Failed", err.message || "Failed to delete customer");
+    } finally {
+      setIsDeleting(false);
+      setCustomerToDelete(null);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedCustomerIds.size === 0) return;
+    setIsDeleting(true);
+    try {
+      const idsToDelete = Array.from(selectedCustomerIds);
+      await CRMService.bulkDeleteCustomers(idsToDelete);
+      setCustomers((prev) => prev.filter((c) => !selectedCustomerIds.has(c.id)));
+      addToast("success", "Customers Deleted", `Successfully deleted ${idsToDelete.length} customer(s).`);
+      setSelectedCustomerIds(new Set());
+    } catch (err: any) {
+      addToast("error", "Bulk Deletion Failed", err.message || "Failed to delete selected customers");
+    } finally {
+      setIsDeleting(false);
+      setIsBulkDeleteModalOpen(false);
+    }
+  };
 
   // Formula Cards State
   const [formulaRecords, setFormulaRecords] = useState<any[]>([]);
@@ -301,12 +364,61 @@ export function OwnerCustomersView() {
             </div>
           </div>
 
+          {/* Bulk Actions Banner */}
+          {selectedCustomerIds.size > 0 && (
+            <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xs animate-in fade-in duration-200">
+              <div className="flex items-center gap-3">
+                <span className="w-8 h-8 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center font-bold text-xs shrink-0">
+                  {selectedCustomerIds.size}
+                </span>
+                <div>
+                  <p className="text-xs font-bold text-rose-950">
+                    {selectedCustomerIds.size} customer{selectedCustomerIds.size > 1 ? "s" : ""} selected
+                  </p>
+                  <p className="text-[11px] text-rose-700">
+                    You can delete all selected records in bulk or clear the selection.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedCustomerIds(new Set())}
+                  className="px-3 py-1.5 rounded-xl border border-rose-300 text-rose-700 bg-white hover:bg-rose-50 text-xs font-semibold cursor-pointer transition-colors"
+                >
+                  Clear Selection
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsBulkDeleteModalOpen(true)}
+                  disabled={isDeleting}
+                  className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold cursor-pointer shadow-xs inline-flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete Selected ({selectedCustomerIds.size})</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Customers Table */}
           <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-4">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="border-b border-slate-100 text-slate-400 font-semibold uppercase tracking-wider">
+                    <th className="py-3 px-3 w-10 text-center">
+                      <input
+                        type="checkbox"
+                        aria-label="Select all customers"
+                        checked={
+                          filteredCustomers.length > 0 &&
+                          selectedCustomerIds.size === filteredCustomers.length
+                        }
+                        onChange={handleSelectAll}
+                        className="w-4 h-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500 cursor-pointer accent-rose-600"
+                      />
+                    </th>
                     <th className="py-3 px-4">Customer Name & Contact</th>
                     <th className="py-3 px-4">Gender</th>
                     <th className="py-3 px-4">VIP Membership</th>
@@ -318,7 +430,21 @@ export function OwnerCustomersView() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredCustomers.map((c) => (
-                    <tr key={c.id} className="hover:bg-slate-50/70 transition-colors">
+                    <tr
+                      key={c.id}
+                      className={`hover:bg-slate-50/70 transition-colors ${
+                        selectedCustomerIds.has(c.id) ? "bg-rose-50/30" : ""
+                      }`}
+                    >
+                      <td className="py-3.5 px-3 w-10 text-center">
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${c.name}`}
+                          checked={selectedCustomerIds.has(c.id)}
+                          onChange={() => toggleSelectCustomer(c.id)}
+                          className="w-4 h-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500 cursor-pointer accent-rose-600"
+                        />
+                      </td>
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-3">
                           {c.avatar ? (
@@ -382,6 +508,7 @@ export function OwnerCustomersView() {
 
                       <td className="py-3.5 px-4 text-right space-x-2">
                         <button
+                          type="button"
                           onClick={() => {
                             setCurrentCustomer(c);
                             setActiveModule("pos");
@@ -398,6 +525,14 @@ export function OwnerCustomersView() {
                         >
                           <Phone className="w-3.5 h-3.5" />
                         </a>
+                        <button
+                          type="button"
+                          title="Delete Customer"
+                          onClick={() => setCustomerToDelete(c)}
+                          className="p-1.5 rounded-lg border border-slate-200 hover:bg-rose-50 hover:border-rose-200 text-slate-400 hover:text-rose-600 cursor-pointer inline-flex items-center transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -952,6 +1087,80 @@ export function OwnerCustomersView() {
         onClose={() => setIsImportModalOpen(false)}
         dataType="customers"
       />
+
+      {/* Delete Single Customer Confirmation Modal */}
+      {customerToDelete && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 border border-slate-100 shadow-2xl animate-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <div className="text-center space-y-1">
+              <h3 className="text-base font-bold text-slate-900">Delete Customer</h3>
+              <p className="text-xs text-slate-500">
+                Are you sure you want to permanently delete{" "}
+                <span className="font-semibold text-slate-800">{customerToDelete.name}</span>? This will remove their record from your salon database.
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setCustomerToDelete(null)}
+                disabled={isDeleting}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-semibold text-xs hover:bg-slate-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteSingleCustomer(customerToDelete)}
+                disabled={isDeleting}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs cursor-pointer inline-flex items-center gap-1.5 disabled:opacity-50 shadow-xs"
+              >
+                {isDeleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>{isDeleting ? "Deleting..." : "Yes, Delete Customer"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Delete Customers Confirmation Modal */}
+      {isBulkDeleteModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 border border-slate-100 shadow-2xl animate-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div className="text-center space-y-1">
+              <h3 className="text-base font-bold text-slate-900">Bulk Delete Customers</h3>
+              <p className="text-xs text-slate-500">
+                Are you sure you want to delete{" "}
+                <span className="font-bold text-rose-600">{selectedCustomerIds.size}</span> selected customer(s)? This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsBulkDeleteModalOpen(false)}
+                disabled={isDeleting}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-semibold text-xs hover:bg-slate-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleBulkDelete}
+                disabled={isDeleting}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs cursor-pointer inline-flex items-center gap-1.5 disabled:opacity-50 shadow-xs"
+              >
+                {isDeleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>{isDeleting ? "Deleting..." : `Delete ${selectedCustomerIds.size} Customers`}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

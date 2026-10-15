@@ -44,6 +44,7 @@ import {
   Check,
   Phone,
   Mail,
+  Copy,
   Calendar,
   Star,
   ExternalLink,
@@ -99,6 +100,9 @@ export interface TenantOwner {
   country: string;
   aiCreditsUsed: number;
   aiCreditsLimit: number;
+  code?: string;
+  ownerName?: string;
+  businessType?: string;
 }
 
 export interface MasterServiceItem {
@@ -161,7 +165,7 @@ export interface IntegrationGateway {
 // MAIN SUPER ADMIN VIEW COMPONENT
 // ==========================================
 export function SuperAdminView() {
-  const { activeSubTab, setActiveSubTab, addToast, currentUser, organizations } = useSalon();
+  const { activeSubTab, setActiveSubTab, addToast, currentUser, organizations, hydrateFromBackend } = useSalon();
 
   // Search, Filter & Drill-down state
   const [searchQuery, setSearchQuery] = useState("");
@@ -276,23 +280,26 @@ export function SuperAdminView() {
   const mapOrgToTenant = (org: any): TenantOwner => {
     return {
       id: org.id || "",
-      name: org.name || "",
+      name: org.owner_name || org.owner || org.name || "Owner",
       brandName: org.name || "",
-      email: org.email || "",
-      phone: org.phone || "",
+      email: org.owner_email || org.email || "",
+      phone: org.owner_phone || org.phone || "",
       plan: org.subscription_tier || "Starter",
       status: org.is_active !== false ? "Active" : "Suspended",
-      branchesCount: org.branches?.length || 0,
-      staffCount: org.users?.length || 0,
+      branchesCount: org.branches_count ?? (org.branches?.length || 0),
+      staffCount: org.staff_count ?? (org.users?.length || 0),
       customersCount: org.customers_count || org.customers?.length || 0,
       bookingsCount: org.bookings_count || org.bookings?.length || 0,
       mrr: Number(org.mrr || 0),
       joinedDate: org.created_at ? new Date(org.created_at).toISOString().split("T")[0] : "",
       renewalDate: org.renewal_date ? new Date(org.renewal_date).toISOString().split("T")[0] : "",
       city: org.city || "",
-      country: org.country || "",
+      country: org.country || "India",
       aiCreditsUsed: Number(org.ai_credits_used || 0),
       aiCreditsLimit: Number(org.ai_credits_limit || 0),
+      code: org.code || "",
+      ownerName: org.owner_name || org.owner || org.name || "",
+      businessType: org.business_type || "general",
     };
   };
 
@@ -328,7 +335,13 @@ export function SuperAdminView() {
       try {
         const orgList = await OrganizationService.getOrganizations();
         if (orgList && Array.isArray(orgList) && orgList.length > 0) {
-          setTenants(orgList.map(mapOrgToTenant));
+          const mapped = orgList.map(mapOrgToTenant);
+          setTenants(mapped);
+          setSelectedOwner((prev) => {
+            if (!prev) return null;
+            const updated = mapped.find((t) => t.id === prev.id);
+            return updated || prev;
+          });
         }
       } catch (err) {
         console.error("Failed to load organizations for super admin:", err);
@@ -434,6 +447,7 @@ export function SuperAdminView() {
         aiCreditsLimit: matchedPlan ? matchedPlan.ai_credits_limit : 0,
       };
       setTenants((prev) => [newTenant, ...prev]);
+      hydrateFromBackend?.();
 
       // Show credentials popup
       setProvisionedCreds({
@@ -1045,15 +1059,50 @@ export function SuperAdminView() {
                       <span className="bg-indigo-100 text-indigo-800 text-xs font-bold px-2.5 py-0.5 rounded-full border border-indigo-200">
                         {selectedOwner.plan} Plan
                       </span>
+                      {selectedOwner.code && (
+                        <span className="bg-slate-100 text-slate-700 font-mono text-[11px] font-bold px-2.5 py-0.5 rounded-md border border-slate-200">
+                          {selectedOwner.code}
+                        </span>
+                      )}
                     </div>
-                    <div className="text-xs text-slate-500 mt-0.5 flex flex-wrap items-center gap-3">
-                      <span>Owner: <strong>{selectedOwner.name}</strong></span>
-                      <span>•</span>
-                      <span>{selectedOwner.email}</span>
-                      <span>•</span>
-                      <span>{selectedOwner.phone}</span>
-                      <span>•</span>
-                      <span className="text-emerald-700 font-semibold">{selectedOwner.city}, {selectedOwner.country}</span>
+                    <div className="text-xs text-slate-600 mt-1 flex flex-wrap items-center gap-3">
+                      <span className="flex items-center gap-1 font-medium text-slate-700">
+                        <User className="w-3.5 h-3.5 text-slate-400" />
+                        Owner: <strong className="text-slate-900">{selectedOwner.name}</strong>
+                      </span>
+                      {selectedOwner.email && (
+                        <>
+                          <span className="text-slate-300">•</span>
+                          <a
+                            href={`mailto:${selectedOwner.email}`}
+                            className="flex items-center gap-1 text-indigo-600 hover:text-indigo-800 font-semibold transition-colors"
+                          >
+                            <Mail className="w-3.5 h-3.5 text-indigo-500" />
+                            {selectedOwner.email}
+                          </a>
+                        </>
+                      )}
+                      {selectedOwner.phone && (
+                        <>
+                          <span className="text-slate-300">•</span>
+                          <a
+                            href={`tel:${selectedOwner.phone}`}
+                            className="flex items-center gap-1 text-emerald-700 hover:text-emerald-900 font-semibold transition-colors"
+                          >
+                            <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                            {selectedOwner.phone}
+                          </a>
+                        </>
+                      )}
+                      {(selectedOwner.city || selectedOwner.country) && (
+                        <>
+                          <span className="text-slate-300">•</span>
+                          <span className="flex items-center gap-1 text-slate-600 font-medium">
+                            <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                            {[selectedOwner.city, selectedOwner.country].filter(Boolean).join(", ")}
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1101,40 +1150,149 @@ export function SuperAdminView() {
 
               {/* Dynamic Drilldown Tab Body */}
               {ownerDrillTab === "overview" && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="bg-indigo-50/50 p-5 rounded-2xl border border-indigo-100 space-y-3">
-                    <h4 className="font-bold text-xs uppercase tracking-wider text-indigo-900">Tenant License Summary</h4>
-                    <div className="space-y-2 text-xs text-slate-700">
-                      <div className="flex justify-between"><span>Subscription MRR:</span><strong className="text-emerald-700 font-bold">₹{selectedOwner.mrr.toLocaleString()}/mo</strong></div>
-                      <div className="flex justify-between"><span>Joined Platform:</span><strong>{selectedOwner.joinedDate}</strong></div>
-                      <div className="flex justify-between"><span>Next Renewal Date:</span><strong>{selectedOwner.renewalDate}</strong></div>
-                      <div className="flex justify-between"><span>License Type:</span><span className="font-bold text-indigo-700">Multi-Location Franchise</span></div>
+                <div className="space-y-6">
+                  {/* Dedicated Official Credentials & Contacts Card */}
+                  <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 rounded-3xl border border-indigo-500/20 shadow-lg text-white relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+                    <div className="relative z-10 space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-indigo-500/20 pb-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-2xl bg-indigo-600/30 border border-indigo-400/40 flex items-center justify-center text-indigo-300 shadow-sm">
+                            <Key className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h4 className="font-extrabold text-sm sm:text-base text-white tracking-wide flex items-center gap-2">
+                              Organization Credentials & Contact Directory
+                              <span className="bg-emerald-500/20 text-emerald-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-500/30">
+                                Verified Active
+                              </span>
+                            </h4>
+                            <p className="text-[11px] text-indigo-200/70">
+                              Registered credentials, owner login email, direct phone, and unique organization codes.
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const credsText = `Salon OS Tenant Credentials\nOrganization: ${selectedOwner.brandName}\nOrg ID: ${selectedOwner.id}\nOrg Code: ${selectedOwner.code || "N/A"}\nOwner: ${selectedOwner.name}\nEmail: ${selectedOwner.email || "N/A"}\nPhone: ${selectedOwner.phone || "N/A"}\nCity: ${selectedOwner.city || "N/A"}, ${selectedOwner.country || "N/A"}\nPlan: ${selectedOwner.plan}`;
+                            navigator.clipboard.writeText(credsText);
+                            addToast("success", "Credentials Copied", "Organization details copied to clipboard.");
+                          }}
+                          className="px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-indigo-200 hover:text-white text-xs font-semibold border border-white/10 transition-all flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Copy Credentials</span>
+                        </button>
+                      </div>
+
+                      {/* Credentials 4-Column Grid */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {/* 1. Email */}
+                        <div className="bg-white/5 backdrop-blur-md rounded-2xl p-4 border border-white/10 space-y-1">
+                          <div className="text-[11px] font-semibold text-indigo-200/70 flex items-center gap-1.5">
+                            <Mail className="w-3.5 h-3.5 text-indigo-400" />
+                            Official Login Email
+                          </div>
+                          <div className="font-bold text-sm text-white truncate" title={selectedOwner.email || "Not Configured"}>
+                            {selectedOwner.email || <span className="text-slate-400 italic font-normal">Not Configured</span>}
+                          </div>
+                          {selectedOwner.email && (
+                            <a
+                              href={`mailto:${selectedOwner.email}`}
+                              className="inline-flex items-center gap-1 text-[11px] text-indigo-300 hover:text-white transition font-medium pt-1"
+                            >
+                              Send Direct Email →
+                            </a>
+                          )}
+                        </div>
+
+                        {/* 2. Phone */}
+                        <div className="bg-white/5 backdrop-blur-md rounded-2xl p-4 border border-white/10 space-y-1">
+                          <div className="text-[11px] font-semibold text-indigo-200/70 flex items-center gap-1.5">
+                            <Phone className="w-3.5 h-3.5 text-emerald-400" />
+                            Primary Phone Number
+                          </div>
+                          <div className="font-bold text-sm text-white truncate" title={selectedOwner.phone || "Not Configured"}>
+                            {selectedOwner.phone || <span className="text-slate-400 italic font-normal">Not Configured</span>}
+                          </div>
+                          {selectedOwner.phone && (
+                            <a
+                              href={`tel:${selectedOwner.phone}`}
+                              className="inline-flex items-center gap-1 text-[11px] text-emerald-300 hover:text-white transition font-medium pt-1"
+                            >
+                              Call / WhatsApp →
+                            </a>
+                          )}
+                        </div>
+
+                        {/* 3. Organization Identity */}
+                        <div className="bg-white/5 backdrop-blur-md rounded-2xl p-4 border border-white/10 space-y-1">
+                          <div className="text-[11px] font-semibold text-indigo-200/70 flex items-center gap-1.5">
+                            <Shield className="w-3.5 h-3.5 text-purple-400" />
+                            Organization Code
+                          </div>
+                          <div className="font-mono font-bold text-sm text-purple-200 tracking-wider">
+                            {selectedOwner.code || selectedOwner.id.substring(0, 12).toUpperCase()}
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-mono truncate" title={selectedOwner.id}>
+                            ID: {selectedOwner.id}
+                          </div>
+                        </div>
+
+                        {/* 4. Owner Account & License */}
+                        <div className="bg-white/5 backdrop-blur-md rounded-2xl p-4 border border-white/10 space-y-1">
+                          <div className="text-[11px] font-semibold text-indigo-200/70 flex items-center gap-1.5">
+                            <UserCheck className="w-3.5 h-3.5 text-amber-400" />
+                            Registered Owner
+                          </div>
+                          <div className="font-bold text-sm text-white truncate">
+                            {selectedOwner.name}
+                          </div>
+                          <div className="text-[10px] text-amber-300 font-semibold">
+                            {selectedOwner.plan} License &bull; Owner Role
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="bg-sky-50/50 p-5 rounded-2xl border border-sky-100 space-y-3">
-                    <h4 className="font-bold text-xs uppercase tracking-wider text-sky-900">AI Quotas & Limits</h4>
-                    <div className="space-y-2 text-xs text-slate-700">
-                      <div className="flex justify-between"><span>AI Credits Consumed:</span><strong>{selectedOwner.aiCreditsUsed.toLocaleString()}</strong></div>
-                      <div className="flex justify-between"><span>Credit Quota Limit:</span><strong>{selectedOwner.aiCreditsLimit.toLocaleString()}</strong></div>
-                      <div className="w-full bg-slate-200 rounded-full h-2 mt-2">
-                        <div
-                          className="bg-sky-600 h-2 rounded-full"
-                          style={{ width: `${(selectedOwner.aiCreditsUsed / selectedOwner.aiCreditsLimit) * 100}%` }}
-                        />
-                      </div>
-                      <div className="text-[10px] text-slate-400 text-right">
-                        {((selectedOwner.aiCreditsUsed / selectedOwner.aiCreditsLimit) * 100).toFixed(1)}% used
+                  {/* 3 Summary Metrics Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="bg-indigo-50/50 p-5 rounded-2xl border border-indigo-100 space-y-3">
+                      <h4 className="font-bold text-xs uppercase tracking-wider text-indigo-900">Tenant License Summary</h4>
+                      <div className="space-y-2 text-xs text-slate-700">
+                        <div className="flex justify-between"><span>Subscription MRR:</span><strong className="text-emerald-700 font-bold">₹{selectedOwner.mrr.toLocaleString()}/mo</strong></div>
+                        <div className="flex justify-between"><span>Joined Platform:</span><strong>{selectedOwner.joinedDate || "Active"}</strong></div>
+                        <div className="flex justify-between"><span>Next Renewal Date:</span><strong>{selectedOwner.renewalDate || "30 Days Active"}</strong></div>
+                        <div className="flex justify-between"><span>License Type:</span><span className="font-bold text-indigo-700">Multi-Location Franchise</span></div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="bg-emerald-50/50 p-5 rounded-2xl border border-emerald-100 space-y-3">
-                    <h4 className="font-bold text-xs uppercase tracking-wider text-emerald-900">Operational Health</h4>
-                    <div className="space-y-2 text-xs text-slate-700">
-                      <div className="flex justify-between"><span>Active Branches:</span><strong>{selectedOwner.branchesCount} online</strong></div>
-                      <div className="flex justify-between"><span>Staff on Duty:</span><strong>{selectedOwner.staffCount} verified</strong></div>
-                      <div className="flex justify-between"><span>POS Status:</span><span className="text-emerald-700 font-bold">Connected (Zero Failures)</span></div>
+                    <div className="bg-sky-50/50 p-5 rounded-2xl border border-sky-100 space-y-3">
+                      <h4 className="font-bold text-xs uppercase tracking-wider text-sky-900">AI Quotas & Limits</h4>
+                      <div className="space-y-2 text-xs text-slate-700">
+                        <div className="flex justify-between"><span>AI Credits Consumed:</span><strong>{selectedOwner.aiCreditsUsed.toLocaleString()}</strong></div>
+                        <div className="flex justify-between"><span>Credit Quota Limit:</span><strong>{selectedOwner.aiCreditsLimit.toLocaleString()}</strong></div>
+                        <div className="w-full bg-slate-200 rounded-full h-2 mt-2">
+                          <div
+                            className="bg-sky-600 h-2 rounded-full"
+                            style={{ width: `${selectedOwner.aiCreditsLimit > 0 ? (selectedOwner.aiCreditsUsed / selectedOwner.aiCreditsLimit) * 100 : 0}%` }}
+                          />
+                        </div>
+                        <div className="text-[10px] text-slate-400 text-right">
+                          {selectedOwner.aiCreditsLimit > 0 ? ((selectedOwner.aiCreditsUsed / selectedOwner.aiCreditsLimit) * 100).toFixed(1) : 0}% used
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-emerald-50/50 p-5 rounded-2xl border border-emerald-100 space-y-3">
+                      <h4 className="font-bold text-xs uppercase tracking-wider text-emerald-900">Operational Health</h4>
+                      <div className="space-y-2 text-xs text-slate-700">
+                        <div className="flex justify-between"><span>Active Branches:</span><strong>{selectedOwner.branchesCount} online</strong></div>
+                        <div className="flex justify-between"><span>Staff on Duty:</span><strong>{selectedOwner.staffCount} verified</strong></div>
+                        <div className="flex justify-between"><span>POS Status:</span><span className="text-emerald-700 font-bold">Connected (Zero Failures)</span></div>
+                      </div>
                     </div>
                   </div>
                 </div>

@@ -88,6 +88,11 @@ class OrganizationResponse(BaseModel):
     ai_credits_limit: Optional[int] = 1000
     ai_credits_used: Optional[int] = 0
     renewal_date: Optional[str] = None
+    owner_name: Optional[str] = None
+    owner_email: Optional[str] = None
+    owner_phone: Optional[str] = None
+    branches_count: Optional[int] = 0
+    staff_count: Optional[int] = 0
 
     class Config:
         from_attributes = True

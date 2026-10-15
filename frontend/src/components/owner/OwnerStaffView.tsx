@@ -39,12 +39,16 @@ import {
   Calculator,
   Fingerprint,
   MapPin,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
 import { Employee, LeaveRequest, AttendanceRecord } from "@/types";
+import { HRMSService } from "@/services/apiClient";
 
 export function OwnerStaffView() {
   const {
     employees,
+    setEmployees,
     attendance,
     leaves,
     selectedBranch,
@@ -97,6 +101,65 @@ export function OwnerStaffView() {
   const [searchQuery, setSearchQuery] = useState("");
   const [deptFilter, setDeptFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+
+  // Employee selection & deletion state
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<Set<string>>(new Set());
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+
+  const toggleSelectEmployee = (id: string) => {
+    setSelectedEmployeeIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleSelectAllEmployees = () => {
+    if (selectedEmployeeIds.size === filteredEmployees.length && filteredEmployees.length > 0) {
+      setSelectedEmployeeIds(new Set());
+    } else {
+      setSelectedEmployeeIds(new Set(filteredEmployees.map((e) => e.id)));
+    }
+  };
+
+  const handleDeleteSingleEmployee = async (emp: Employee) => {
+    setIsDeleting(true);
+    try {
+      await HRMSService.deleteEmployee(emp.id);
+      setEmployees((prev) => prev.filter((e) => e.id !== emp.id));
+      setSelectedEmployeeIds((prev) => {
+        const next = new Set(prev);
+        next.delete(emp.id);
+        return next;
+      });
+      addToast("success", "Employee Deleted", `${emp.name} was removed from the staff directory.`);
+    } catch (err: any) {
+      addToast("error", "Deletion Failed", err.message || "Failed to delete employee");
+    } finally {
+      setIsDeleting(false);
+      setEmployeeToDelete(null);
+    }
+  };
+
+  const handleBulkDeleteEmployees = async () => {
+    if (selectedEmployeeIds.size === 0) return;
+    setIsDeleting(true);
+    try {
+      const idsToDelete = Array.from(selectedEmployeeIds);
+      await HRMSService.bulkDeleteEmployees(idsToDelete);
+      setEmployees((prev) => prev.filter((e) => !selectedEmployeeIds.has(e.id)));
+      addToast("success", "Employees Deleted", `Successfully deleted ${idsToDelete.length} employee(s).`);
+      setSelectedEmployeeIds(new Set());
+    } catch (err: any) {
+      addToast("error", "Bulk Deletion Failed", err.message || "Failed to delete selected employees");
+    } finally {
+      setIsDeleting(false);
+      setIsBulkDeleteModalOpen(false);
+    }
+  };
 
   // Modals State
   const [isAddStaffOpen, setIsAddStaffOpen] = useState(false);
@@ -468,12 +531,61 @@ export function OwnerStaffView() {
             </div>
           </div>
 
+          {/* Bulk Actions Banner */}
+          {selectedEmployeeIds.size > 0 && (
+            <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xs animate-in fade-in duration-200">
+              <div className="flex items-center gap-3">
+                <span className="w-8 h-8 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center font-bold text-xs shrink-0">
+                  {selectedEmployeeIds.size}
+                </span>
+                <div>
+                  <p className="text-xs font-bold text-rose-950">
+                    {selectedEmployeeIds.size} employee{selectedEmployeeIds.size > 1 ? "s" : ""} selected
+                  </p>
+                  <p className="text-[11px] text-rose-700">
+                    You can delete all selected staff members in bulk or clear the selection.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedEmployeeIds(new Set())}
+                  className="px-3 py-1.5 rounded-xl border border-rose-300 text-rose-700 bg-white hover:bg-rose-50 text-xs font-semibold cursor-pointer transition-colors"
+                >
+                  Clear Selection
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsBulkDeleteModalOpen(true)}
+                  disabled={isDeleting}
+                  className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold cursor-pointer shadow-xs inline-flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete Selected ({selectedEmployeeIds.size})</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Employee Table */}
           <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50/50 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    <th className="py-3.5 px-3 w-10 text-center font-semibold">
+                      <input
+                        type="checkbox"
+                        aria-label="Select all employees"
+                        checked={
+                          filteredEmployees.length > 0 &&
+                          selectedEmployeeIds.size === filteredEmployees.length
+                        }
+                        onChange={handleSelectAllEmployees}
+                        className="w-4 h-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500 cursor-pointer accent-rose-600"
+                      />
+                    </th>
                     <th className="py-3.5 px-4 font-semibold">Employee</th>
                     <th className="py-3.5 px-4 font-semibold">Code</th>
                     <th className="py-3.5 px-4 font-semibold">Designation</th>
@@ -489,7 +601,7 @@ export function OwnerStaffView() {
                 <tbody className="divide-y divide-slate-100">
                   {filteredEmployees.map((emp) => {
                     const initials = emp.name
-                      ? emp.name
+                        ? emp.name
                           .split(" ")
                           .map((n) => n[0])
                           .join("")
@@ -498,7 +610,21 @@ export function OwnerStaffView() {
                       : "EMP";
 
                     return (
-                      <tr key={emp.id} className="hover:bg-slate-50/80 transition-colors">
+                      <tr
+                        key={emp.id}
+                        className={`hover:bg-slate-50/80 transition-colors ${
+                          selectedEmployeeIds.has(emp.id) ? "bg-rose-50/30" : ""
+                        }`}
+                      >
+                        <td className="py-3 px-3 w-10 text-center">
+                          <input
+                            type="checkbox"
+                            aria-label={`Select ${emp.name}`}
+                            checked={selectedEmployeeIds.has(emp.id)}
+                            onChange={() => toggleSelectEmployee(emp.id)}
+                            className="w-4 h-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500 cursor-pointer accent-rose-600"
+                          />
+                        </td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-full bg-sky-50 text-sky-700 font-bold text-xs flex items-center justify-center shrink-0">
@@ -532,6 +658,7 @@ export function OwnerStaffView() {
                         <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-2 text-slate-400">
                             <button
+                              type="button"
                               title="Documents"
                               onClick={() => addToast("info", "Documents", `Viewing docs for ${emp.name}`)}
                               className="p-1 hover:text-sky-600 hover:bg-sky-50 rounded-md transition-colors cursor-pointer"
@@ -539,6 +666,7 @@ export function OwnerStaffView() {
                               <FileText className="w-3.5 h-3.5 text-sky-500" />
                             </button>
                             <button
+                              type="button"
                               title="QR Code"
                               onClick={() => addToast("info", "Badge QR", `QR Code for ${emp.name}`)}
                               className="p-1 hover:text-sky-600 hover:bg-sky-50 rounded-md transition-colors cursor-pointer"
@@ -546,6 +674,7 @@ export function OwnerStaffView() {
                               <QrCode className="w-3.5 h-3.5 text-sky-500" />
                             </button>
                             <button
+                              type="button"
                               title="Edit Employee"
                               onClick={() => addToast("info", "Edit Employee", `Editing ${emp.name}`)}
                               className="p-1 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
@@ -553,8 +682,9 @@ export function OwnerStaffView() {
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>
                             <button
+                              type="button"
                               title="Delete Employee"
-                              onClick={() => addToast("error", "Deleted", `${emp.name} removed from registry.`)}
+                              onClick={() => setEmployeeToDelete(emp)}
                               className="p-1 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors cursor-pointer"
                             >
                               <Trash2 className="w-3.5 h-3.5 text-rose-500" />
@@ -1723,6 +1853,80 @@ export function OwnerStaffView() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Single Employee Confirmation Modal */}
+      {employeeToDelete && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 border border-slate-100 shadow-2xl animate-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <div className="text-center space-y-1">
+              <h3 className="text-base font-bold text-slate-900">Delete Employee</h3>
+              <p className="text-xs text-slate-500">
+                Are you sure you want to permanently delete{" "}
+                <span className="font-semibold text-slate-800">{employeeToDelete.name}</span>? This will remove their staff record and login access.
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setEmployeeToDelete(null)}
+                disabled={isDeleting}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-semibold text-xs hover:bg-slate-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteSingleEmployee(employeeToDelete)}
+                disabled={isDeleting}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs cursor-pointer inline-flex items-center gap-1.5 disabled:opacity-50 shadow-xs"
+              >
+                {isDeleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>{isDeleting ? "Deleting..." : "Yes, Delete Employee"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Delete Employees Confirmation Modal */}
+      {isBulkDeleteModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 border border-slate-100 shadow-2xl animate-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div className="text-center space-y-1">
+              <h3 className="text-base font-bold text-slate-900">Bulk Delete Employees</h3>
+              <p className="text-xs text-slate-500">
+                Are you sure you want to delete{" "}
+                <span className="font-bold text-rose-600">{selectedEmployeeIds.size}</span> selected employee(s)? This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsBulkDeleteModalOpen(false)}
+                disabled={isDeleting}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-semibold text-xs hover:bg-slate-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleBulkDeleteEmployees}
+                disabled={isDeleting}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs cursor-pointer inline-flex items-center gap-1.5 disabled:opacity-50 shadow-xs"
+              >
+                {isDeleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>{isDeleting ? "Deleting..." : `Delete ${selectedEmployeeIds.size} Employees`}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

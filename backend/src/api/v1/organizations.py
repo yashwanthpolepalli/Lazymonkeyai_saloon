@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from src.core.database import get_db
 from src.models.organization import Organization, ApprovalRequest, AuditLog, ServiceAllocation
+from src.models.erp import User
+from src.models.salon import Branch
 from src.schemas.organization import (
     OrganizationCreate, OrganizationUpdate, OrganizationResponse,
     ApprovalRequestCreate, ApprovalDecision, ApprovalRequestResponse,
@@ -14,9 +16,53 @@ router = APIRouter(tags=["Organizations & Policy Engine"])
 
 # ==================== ORGANIZATIONS & POLICY CONFIG ====================
 
+def _format_org_response(org: Organization) -> dict:
+    owner = next((u for u in (org.users or []) if u.role in ("owner", "admin", "director")), None)
+    if not owner and org.users:
+        owner = org.users[0]
+
+    org_email = org.email or (owner.email if owner else None)
+    org_phone = org.phone or (owner.phone if owner else None)
+    owner_name = owner.name if owner else org.name
+    owner_email = owner.email if owner else org_email
+    owner_phone = owner.phone if owner else org_phone
+
+    return {
+        "id": org.id,
+        "name": org.name,
+        "code": org.code,
+        "business_type": org.business_type,
+        "brand_tagline": org.brand_tagline,
+        "logo": org.logo,
+        "currency": org.currency,
+        "tax_rate": org.tax_rate,
+        "gstin_or_tax_id": org.gstin_or_tax_id,
+        "cin_or_reg_number": org.cin_or_reg_number,
+        "email": org_email,
+        "phone": org_phone,
+        "website": org.website,
+        "address": org.address,
+        "city": org.city,
+        "state": org.state,
+        "country": org.country,
+        "is_active": org.is_active,
+        "policy_config": org.policy_config,
+        "subscription_tier": org.subscription_tier or "Starter",
+        "mrr": org.mrr or 0.0,
+        "ai_credits_limit": org.ai_credits_limit or 1000,
+        "ai_credits_used": org.ai_credits_used or 0,
+        "renewal_date": org.renewal_date,
+        "owner_name": owner_name,
+        "owner_email": owner_email,
+        "owner_phone": owner_phone,
+        "branches_count": len(org.branches) if org.branches else 0,
+        "staff_count": len(org.users) if org.users else 0,
+    }
+
 @router.get("/organizations", response_model=List[OrganizationResponse])
 def list_organizations(db: Session = Depends(get_db)):
-    return db.query(Organization).order_by(Organization.created_at.desc()).all()
+    orgs = db.query(Organization).order_by(Organization.created_at.desc()).all()
+    return [_format_org_response(o) for o in orgs]
 
 @router.post("/organizations", response_model=OrganizationResponse, status_code=status.HTTP_201_CREATED)
 def create_organization(req: OrganizationCreate, db: Session = Depends(get_db)):
@@ -47,14 +93,14 @@ def create_organization(req: OrganizationCreate, db: Session = Depends(get_db)):
     db.add(org)
     db.commit()
     db.refresh(org)
-    return org
+    return _format_org_response(org)
 
 @router.get("/organizations/{org_id}", response_model=OrganizationResponse)
 def get_organization(org_id: str, db: Session = Depends(get_db)):
     org = db.query(Organization).filter(Organization.id == org_id).first()
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
-    return org
+    return _format_org_response(org)
 
 @router.put("/organizations/{org_id}", response_model=OrganizationResponse)
 def update_organization(org_id: str, req: OrganizationUpdate, db: Session = Depends(get_db)):
@@ -73,6 +119,30 @@ def update_organization(org_id: str, req: OrganizationUpdate, db: Session = Depe
     db.commit()
     db.refresh(org)
     return org
+
+@router.delete("/organizations/{org_id}", status_code=status.HTTP_200_OK)
+def delete_organization(org_id: str, db: Session = Depends(get_db)):
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    # 1. Delete associated non-admin users (staff, stylists, branch managers, owners)
+    db.query(User).filter(User.organization_id == org_id, User.role != "admin").delete(synchronize_session=False)
+
+    # 2. For any platform admins who had this org assigned, clear organization_id
+    db.query(User).filter(User.organization_id == org_id, User.role == "admin").update({"organization_id": None}, synchronize_session=False)
+
+    # 3. Delete associated branches
+    db.query(Branch).filter(Branch.organization_id == org_id).delete(synchronize_session=False)
+
+    # 4. Delete the organization (cascading deletes approval_requests, audit_logs, service_allocations, categories, services)
+    db.delete(org)
+    db.commit()
+
+    return {
+        "success": True,
+        "message": f"Organization '{org.name}' and all associated records deleted successfully."
+    }
 
 # ==================== APPROVAL WORKFLOW ENGINE ====================
 

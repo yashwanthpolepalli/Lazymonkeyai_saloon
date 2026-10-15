@@ -54,7 +54,11 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
       throw new Error(errData.detail || errData.message || `HTTP ${res.status}: ${res.statusText}`);
     }
 
-    return await res.json();
+    if (res.status === 204) {
+      return {} as T;
+    }
+    const text = await res.text();
+    return text ? JSON.parse(text) : ({} as T);
   } catch (error) {
     clearTimeout(timeoutId);
     if (error instanceof Error && error.name === "AbortError") {
@@ -230,6 +234,17 @@ export const CRMService = {
       body: JSON.stringify(customerData),
     }),
 
+  deleteCustomer: (customerId: string) =>
+    request<{ success: boolean; message?: string; id?: string }>(`/crm/customers/${customerId}`, {
+      method: "DELETE",
+    }),
+
+  bulkDeleteCustomers: (customerIds: string[]) =>
+    request<{ success: boolean; deleted_count: number; deleted_ids: string[] }>("/crm/customers/bulk-delete", {
+      method: "POST",
+      body: JSON.stringify({ customer_ids: customerIds }),
+    }),
+
   getMemberships: () =>
     request<any[]>("/crm_modules/memberships"),
 
@@ -320,6 +335,17 @@ export const HRMSService = {
     request<any>("/hrms/leaves", {
       method: "POST",
       body: JSON.stringify(leaveData),
+    }),
+
+  deleteEmployee: (employeeId: string) =>
+    request<{ success: boolean; message?: string; id?: string }>(`/hrms/employees/${employeeId}`, {
+      method: "DELETE",
+    }),
+
+  bulkDeleteEmployees: (employeeIds: string[]) =>
+    request<{ success: boolean; deleted_count: number; deleted_ids: string[] }>("/hrms/employees/bulk-delete", {
+      method: "POST",
+      body: JSON.stringify({ employee_ids: employeeIds }),
     }),
 };
 
