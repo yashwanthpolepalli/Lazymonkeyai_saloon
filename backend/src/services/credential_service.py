@@ -132,6 +132,19 @@ def provision_user_account(
     clean_email = email.strip().lower()
     plain_password = custom_password or generate_default_password(name, phone)
 
+    # Validate foreign keys
+    valid_org_id = None
+    if organization_id and isinstance(organization_id, str) and organization_id.strip():
+        o = db.query(Organization).filter(Organization.id == organization_id.strip()).first()
+        if o:
+            valid_org_id = o.id
+
+    valid_branch_id = None
+    if branch_id and isinstance(branch_id, str) and branch_id.strip():
+        b = db.query(Branch).filter(Branch.id == branch_id.strip()).first()
+        if b:
+            valid_branch_id = b.id
+
     # Check if user already exists
     user = db.query(User).filter(User.email == clean_email).first()
     if user:
@@ -140,10 +153,10 @@ def provision_user_account(
         user.phone = phone.strip() if phone else user.phone
         user.role = role
         user.password_hash = get_password_hash(plain_password)
-        if organization_id:
-            user.organization_id = organization_id
-        if branch_id:
-            user.branch_id = branch_id
+        if valid_org_id:
+            user.organization_id = valid_org_id
+        if valid_branch_id:
+            user.branch_id = valid_branch_id
         if department:
             user.department = department
         user.is_active = True
@@ -158,8 +171,8 @@ def provision_user_account(
             phone=phone.strip() if phone else None,
             password_hash=get_password_hash(plain_password),
             role=role,
-            organization_id=organization_id,
-            branch_id=branch_id,
+            organization_id=valid_org_id,
+            branch_id=valid_branch_id,
             department=department or ("Front Office" if role == "customer" else "Operations"),
             is_active=True,
             is_verified=True,

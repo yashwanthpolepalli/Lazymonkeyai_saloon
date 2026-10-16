@@ -60,7 +60,16 @@ export function MainNavbar({ onLogout }: MainNavbarProps) {
   const [isBranchDropdownOpen, setIsBranchDropdownOpen] = useState(false);
   const [isOrgDropdownOpen, setIsOrgDropdownOpen] = useState(false);
 
-  // Role Metadata
+  // Helper to ensure only real uploaded images are shown (filter out dummy/unsplash stock photos)
+  const isCustomImage = (url?: string | null) => {
+    if (!url || typeof url !== "string") return false;
+    const trimmed = url.trim();
+    if (!trimmed) return false;
+    if (trimmed.includes("images.unsplash.com")) return false;
+    return true;
+  };
+
+  // Role Metadata - Strictly use the authenticated user's dynamic profile avatar across all roles
   const roleMeta = {
     customer: {
       title: "Customer & Beneficiary Portal",
@@ -69,7 +78,7 @@ export function MainNavbar({ onLogout }: MainNavbarProps) {
       icon: <Sparkles className="w-4 h-4 text-pink-600" />,
       userTitle: currentUser?.name || currentCustomer.name || "Customer",
       userSubtitle: `${currentCustomer.membershipTier || "Standard"} Member`,
-      avatarUrl: currentUser?.avatar || currentCustomer.avatar || "",
+      avatarUrl: currentUser?.avatar || "",
     },
     owner: {
       title: `${currentOrganization?.name || "Salon OS"} Suite`,
@@ -78,7 +87,7 @@ export function MainNavbar({ onLogout }: MainNavbarProps) {
       icon: <Crown className="w-4 h-4 text-emerald-600" />,
       userTitle: currentUser?.name || ownerProfile?.name || "Salon Director",
       userSubtitle: `${(currentOrganization?.business_type || "general").toUpperCase()} MANAGEMENT`,
-      avatarUrl: currentUser?.avatar || ownerProfile?.avatarUrl || "",
+      avatarUrl: currentUser?.avatar || "",
     },
     staff: {
       title: "Staff & Artisan Portal",
@@ -87,7 +96,7 @@ export function MainNavbar({ onLogout }: MainNavbarProps) {
       icon: <Scissors className="w-4 h-4 text-indigo-600" />,
       userTitle: currentUser?.name || currentStaff.name || "Staff",
       userSubtitle: `${currentStaff.tier?.toUpperCase() || "STAFF"} STYLIST`,
-      avatarUrl: currentUser?.avatar || currentStaff.avatar || "",
+      avatarUrl: currentUser?.avatar || "",
     },
     admin: {
       title: "Super Admin Console",
@@ -239,7 +248,7 @@ export function MainNavbar({ onLogout }: MainNavbarProps) {
         {/* Left: Brand Logo & Salon Name */}
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2.5 text-left">
-            {customizationSettings?.logoUrl ? (
+            {isCustomImage(customizationSettings?.logoUrl) ? (
               <img
                 src={customizationSettings.logoUrl}
                 alt={customizationSettings.salonName}
@@ -405,7 +414,7 @@ export function MainNavbar({ onLogout }: MainNavbarProps) {
 
           {/* User Profile Card */}
           <div className="flex items-center gap-2.5 pl-2 border-l border-slate-200">
-            {roleMeta.avatarUrl ? (
+            {isCustomImage(roleMeta.avatarUrl) ? (
               <img
                 src={roleMeta.avatarUrl}
                 alt={roleMeta.userTitle}
@@ -480,11 +489,25 @@ export function MainNavbar({ onLogout }: MainNavbarProps) {
               tab.id === "settings" &&
               ["settings", "profile", "branches", "customizations", "mfa"].includes(activeSubTab);
 
-            const isActive = isStaffActive || isSettingsActive || activeSubTab === tab.id;
+            const isPosActive =
+              tab.id === "pos" &&
+              ["pos", "billing", "newsale"].includes(activeSubTab);
+
+            const isActive = isStaffActive || isSettingsActive || isPosActive || activeSubTab === tab.id;
             return (
               <button
                 key={tab.id}
                 onClick={() => {
+                  if (typeof window !== "undefined") {
+                    const url = new URL(window.location.href);
+                    url.searchParams.delete("customerId");
+                    url.searchParams.delete("customer_id");
+                    if (tab.id === "pos") {
+                      url.searchParams.delete("subtab");
+                      url.searchParams.set("tab", "pos");
+                    }
+                    window.history.replaceState(null, "", url.toString());
+                  }
                   if (tab.id === "staff") {
                     setActiveSubTab("employees");
                   } else {

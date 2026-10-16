@@ -128,7 +128,7 @@ export function WorkspaceModule() {
             size="sm"
             onClick={() => {
               setActiveModule("pos");
-              setActiveSubTab("newsale");
+              setActiveSubTab("pos");
             }}
             className="text-stone-200 border-stone-700 hover:bg-stone-800 cursor-pointer"
           >
@@ -311,7 +311,7 @@ export function WorkspaceModule() {
                     size="sm"
                     onClick={() => {
                       setActiveModule("pos");
-                      setActiveSubTab("newsale");
+                      setActiveSubTab("pos");
                     }}
                   >
                     POS Bill

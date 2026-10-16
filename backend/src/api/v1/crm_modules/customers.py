@@ -1,12 +1,15 @@
+import uuid
 from typing import List, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from src.core.database import get_db
-from src.models.customer import Customer, WalletTransaction
+from src.models.customer import Customer, WalletTransaction, WalletTopUpPack
+from src.models.salon import Branch, Stylist
 from src.schemas.customer import (
     CustomerCreate, CustomerUpdate, CustomerResponse,
-    WalletTopUpRequest, WalletBalanceResponse
+    WalletTopUpRequest, WalletBalanceResponse,
+    WalletTopUpPackCreate, WalletTopUpPackResponse
 )
 from src.utils.number_series import generate_reference_code
 
@@ -35,21 +38,30 @@ def get_customers(
 
 @router.post("", response_model=CustomerResponse, status_code=status.HTTP_201_CREATED)
 def create_customer(payload: CustomerCreate, db: Session = Depends(get_db)):
-    existing = db.query(Customer).filter(Customer.phone == payload.phone).first()
+    clean_phone = payload.phone.strip() if payload.phone else ""
+    existing = db.query(Customer).filter(Customer.phone == clean_phone).first()
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Customer with phone number {payload.phone} already registered"
+            detail=f"Customer with phone number {clean_phone} already registered"
         )
     
+    # Safely resolve preferred branch if provided and valid in the database
+    resolved_branch_id = None
+    if payload.preferred_branch_id and payload.preferred_branch_id.strip():
+        branch = db.query(Branch).filter(Branch.id == payload.preferred_branch_id.strip()).first()
+        if branch:
+            resolved_branch_id = branch.id
+
+    clean_email = payload.email.strip() if payload.email and payload.email.strip() else None
     joined_date = datetime.now().strftime("%Y-%m-%d")
     customer = Customer(
-        name=payload.name,
-        phone=payload.phone,
-        email=payload.email,
+        name=payload.name.strip(),
+        phone=clean_phone,
+        email=clean_email,
         gender="female" if payload.gender == "female" else ("male" if payload.gender == "male" else "other"),
         membership_tier=payload.tier or "Standard",
-        preferred_branch_id=payload.preferred_branch_id,
+        preferred_branch_id=resolved_branch_id,
         notes=payload.notes,
         joined_date=joined_date,
         segment="New Customer",
@@ -65,17 +77,17 @@ def create_customer(payload: CustomerCreate, db: Session = Depends(get_db)):
     db.refresh(customer)
 
     # Automatically provision User login account and dispatch credential email if email is provided
-    if payload.email:
+    if clean_email:
         try:
             from src.services.credential_service import provision_user_account
             provision_user_account(
                 db=db,
                 name=payload.name,
-                email=payload.email,
-                phone=payload.phone,
+                email=clean_email,
+                phone=clean_phone,
                 role="customer",
                 organization_id=payload.organization_id if hasattr(payload, "organization_id") else None,
-                branch_id=payload.preferred_branch_id,
+                branch_id=resolved_branch_id,
                 department="VIP Client",
             )
         except Exception as err:
@@ -96,7 +108,24 @@ def update_customer(customer_id: str, payload: CustomerUpdate, db: Session = Dep
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
     
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    data = payload.model_dump(exclude_unset=True)
+    if "preferred_branch_id" in data:
+        bid = data["preferred_branch_id"]
+        if bid and isinstance(bid, str) and bid.strip():
+            branch = db.query(Branch).filter(Branch.id == bid.strip()).first()
+            data["preferred_branch_id"] = branch.id if branch else None
+        else:
+            data["preferred_branch_id"] = None
+
+    if "preferred_stylist_id" in data:
+        sid = data["preferred_stylist_id"]
+        if sid and isinstance(sid, str) and sid.strip():
+            stylist = db.query(Stylist).filter(Stylist.id == sid.strip()).first()
+            data["preferred_stylist_id"] = stylist.id if stylist else None
+        else:
+            data["preferred_stylist_id"] = None
+
+    for key, value in data.items():
         setattr(customer, key, value)
     
     db.commit()
@@ -173,14 +202,47 @@ def delete_customer(customer_id: str, db: Session = Depends(get_db)):
 # --- Wallet Sub-Endpoints mapped to frontend apiClient.ts ---
 wallet_router = APIRouter(prefix="/crm_modules/wallet", tags=["CRM - Wallet"])
 
+@wallet_router.get("/packs", response_model=List[WalletTopUpPackResponse])
+@router.get("/wallet/packs", response_model=List[WalletTopUpPackResponse])
+def get_wallet_topup_packs(db: Session = Depends(get_db)):
+    """Fetch active promotional wallet top-up packs directly from database."""
+    return db.query(WalletTopUpPack).filter(WalletTopUpPack.is_active == True).order_by(
+        WalletTopUpPack.display_order.asc(), 
+        WalletTopUpPack.amount.asc()
+    ).all()
+
+
+@wallet_router.post("/packs", response_model=WalletTopUpPackResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/wallet/packs", response_model=WalletTopUpPackResponse, status_code=status.HTTP_201_CREATED)
+def create_wallet_topup_pack(payload: WalletTopUpPackCreate, db: Session = Depends(get_db)):
+    """Add a new promotional wallet top-up pack to the database."""
+    pack = WalletTopUpPack(
+        id=str(uuid.uuid4()),
+        name=payload.name.strip(),
+        amount=payload.amount,
+        bonus=payload.bonus,
+        badge=payload.badge,
+        is_popular=payload.is_popular,
+        display_order=payload.display_order,
+        is_active=True
+    )
+    db.add(pack)
+    db.commit()
+    db.refresh(pack)
+    return pack
+
+
 @wallet_router.get("/{customer_id}", response_model=WalletBalanceResponse)
 @router.get("/{customer_id}/wallet", response_model=WalletBalanceResponse)
 def get_customer_wallet(customer_id: str, db: Session = Depends(get_db)):
-    customer = db.query(Customer).filter(Customer.id == customer_id).first()
+    customer = db.query(Customer).filter(Customer.id == customer_id, Customer.is_active == True).first()
     if not customer:
-        raise HTTPException(status_code=404, detail="Customer not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Customer with ID '{customer_id}' not found in database."
+        )
     
-    txs = db.query(WalletTransaction).filter(WalletTransaction.customer_id == customer_id).order_by(WalletTransaction.created_at.desc()).all()
+    txs = db.query(WalletTransaction).filter(WalletTransaction.customer_id == customer.id).order_by(WalletTransaction.created_at.desc()).all()
     history = [
         {
             "id": tx.id,
@@ -189,7 +251,7 @@ def get_customer_wallet(customer_id: str, db: Session = Depends(get_db)):
             "bonus_amount": tx.bonus_amount,
             "balance_after": tx.balance_after,
             "payment_method": tx.payment_method,
-            "date": tx.created_at.isoformat() if tx.created_at else "",
+            "date": tx.created_at.strftime("%b %d, %Y %I:%M %p") if tx.created_at else "",
             "notes": tx.notes
         }
         for tx in txs
@@ -203,14 +265,24 @@ def get_customer_wallet(customer_id: str, db: Session = Depends(get_db)):
 @wallet_router.post("/topup")
 @router.post("/wallet/topup")
 def top_up_wallet(req: WalletTopUpRequest, db: Session = Depends(get_db)):
-    customer = db.query(Customer).filter(Customer.id == req.customer_id).first()
+    if not req.customer_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="customer_id is required for wallet top-up."
+        )
+
+    customer = db.query(Customer).filter(Customer.id == req.customer_id, Customer.is_active == True).first()
     if not customer:
-        raise HTTPException(status_code=404, detail="Customer not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Customer with ID '{req.customer_id}' not found in database."
+        )
     
     total_credit = req.amount + req.bonus
     customer.wallet_balance = (customer.wallet_balance or 0.0) + total_credit
     
     tx = WalletTransaction(
+        id=str(uuid.uuid4()),
         customer_id=customer.id,
         type="topup",
         amount=req.amount,
@@ -229,4 +301,5 @@ def top_up_wallet(req: WalletTopUpRequest, db: Session = Depends(get_db)):
         "txId": tx.id,
         "success": True
     }
+
 

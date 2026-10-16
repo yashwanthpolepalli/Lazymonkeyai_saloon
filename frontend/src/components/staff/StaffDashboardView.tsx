@@ -35,7 +35,7 @@ import {
   Zap,
 } from "lucide-react";
 import { AppointmentStatus, GenderType, TimeSlotConfig, CustomScheduleRule } from "@/types";
-import { generateId } from "@/lib/utils";
+import { generateId, normalizeSlotTime, sortTimeSlots } from "@/lib/utils";
 
 export function StaffDashboardView() {
   const {
@@ -179,9 +179,41 @@ export function StaffDashboardView() {
     setRescheduleTargetApt(null);
   };
 
-  const handleAddSlot = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newSlotTimeInput.trim()) return;
+  const handleAddSlot = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const trimmed = newSlotTimeInput.trim();
+    if (!trimmed) {
+      addToast(
+        "warning",
+        "Time Required",
+        "Please enter a time for the slot (e.g. 08:30 AM or 09:00 PM)."
+      );
+      return;
+    }
+
+    const normalized = normalizeSlotTime(trimmed);
+    if (!normalized) {
+      addToast(
+        "warning",
+        "Invalid Time Format",
+        "Please enter a valid time like '08:30 AM', '08:30', or '09:00 PM'."
+      );
+      return;
+    }
+
+    const alreadyExists = timeSlots.some(
+      (s) => s.time.toLowerCase() === normalized.toLowerCase()
+    );
+    if (alreadyExists) {
+      addToast(
+        "info",
+        "Slot Already Configured",
+        `Time slot ${normalized} already exists in the schedule.`
+      );
+      setNewSlotTimeInput("");
+      return;
+    }
+
     const allowedGenders: GenderType[] =
       newSlotGender === "all"
         ? ["women", "men", "kids", "unisex"]
@@ -196,7 +228,7 @@ export function StaffDashboardView() {
         : "regular";
 
     addCustomSlot(
-      newSlotTimeInput.trim(),
+      normalized,
       selectedBranch.id,
       currentStaff.id,
       allowedGenders,
@@ -386,7 +418,7 @@ export function StaffDashboardView() {
       {/* Top Welcome Bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs">
         <div className="flex items-center gap-4">
-          {currentStaff.avatar ? (
+          {currentStaff.avatar && !currentStaff.avatar.includes("unsplash.com") ? (
             <img
               src={currentStaff.avatar}
               alt={currentStaff.name}
@@ -671,7 +703,7 @@ export function StaffDashboardView() {
                     onChange={(e) => setBatchFromTime(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white font-mono focus:outline-none focus:ring-2 focus:ring-amber-400"
                   >
-                    {timeSlots.map((s) => (
+                    {sortTimeSlots(timeSlots).map((s) => (
                       <option key={s.id} value={s.time}>
                         {s.time}
                       </option>
@@ -686,7 +718,7 @@ export function StaffDashboardView() {
                     onChange={(e) => setBatchToTime(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white font-mono focus:outline-none focus:ring-2 focus:ring-amber-400"
                   >
-                    {timeSlots.map((s) => (
+                    {sortTimeSlots(timeSlots).map((s) => (
                       <option key={s.id} value={s.time}>
                         {s.time}
                       </option>
@@ -901,18 +933,41 @@ export function StaffDashboardView() {
 
             {/* 4. Add Custom Slot Input & Select All */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-              <button
-                type="button"
-                onClick={handleSelectAllSlots}
-                className="text-xs font-semibold text-slate-700 hover:text-slate-900 flex items-center gap-1.5 cursor-pointer"
-              >
-                {selectedSlotIds.length === timeSlots.length ? (
-                  <CheckSquare className="w-4 h-4 text-amber-500" />
-                ) : (
-                  <Square className="w-4 h-4 text-slate-400" />
-                )}
-                <span>Select All Slots ({timeSlots.length})</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSelectAllSlots}
+                  className="text-xs font-semibold text-slate-700 hover:text-slate-900 flex items-center gap-1.5 cursor-pointer px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100"
+                >
+                  {selectedSlotIds.length === timeSlots.length ? (
+                    <CheckSquare className="w-4 h-4 text-amber-500" />
+                  ) : (
+                    <Square className="w-4 h-4 text-slate-400" />
+                  )}
+                  <span>Select All Slots ({timeSlots.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    timeSlots.forEach((slot) => {
+                      updateSlotConfig(slot.id, {
+                        allowedGenders: ["women", "men", "kids", "unisex"],
+                        allowedCategories: ["all"],
+                        slotType: "regular",
+                        isAvailable: true,
+                        blockedReason: undefined,
+                      });
+                    });
+                    setSelectedSlotIds([]);
+                    addToast("success", "All Slots Unblocked", "All slots are unblocked and available.");
+                  }}
+                  className="px-3 py-1.5 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-800 text-xs font-semibold flex items-center gap-1.5 hover:bg-emerald-100 cursor-pointer shadow-2xs"
+                >
+                  <Unlock className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Unblock All Slots</span>
+                </button>
+              </div>
 
               <form onSubmit={handleAddSlot} className="flex flex-wrap sm:flex-nowrap gap-2 flex-1 max-w-lg">
                 <input
@@ -933,8 +988,9 @@ export function StaffDashboardView() {
                   <option value="kids">Kids Friendly 🧒</option>
                 </select>
                 <button
-                  type="submit"
-                  className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-xs flex items-center gap-1 cursor-pointer shadow-xs shrink-0"
+                  type="button"
+                  onClick={() => handleAddSlot()}
+                  className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-semibold text-xs flex items-center gap-1 cursor-pointer shadow-xs shrink-0 transition-transform"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Add Slot</span>
@@ -944,7 +1000,7 @@ export function StaffDashboardView() {
 
             {/* Time Slot Toggle Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              {timeSlots.map((slot) => {
+              {sortTimeSlots(timeSlots).map((slot) => {
                 const isAvail = slot.isAvailable;
                 const isSelected = selectedSlotIds.includes(slot.id);
                 const audienceVal =
@@ -999,7 +1055,7 @@ export function StaffDashboardView() {
                             toggleSlotAvailability(
                               slot.id,
                               !isAvail,
-                              !isAvail ? undefined : "Staff Break / Unavailable"
+                              !isAvail ? undefined : "Blocked by Staff"
                             )
                           }
                           className={`px-2.5 py-1 rounded-lg text-xs font-bold cursor-pointer transition-all ${

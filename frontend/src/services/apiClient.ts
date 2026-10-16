@@ -17,9 +17,11 @@
  * - /api/v1/settings (Customization, GST, MFA, Profile)
  */
 
-const rawUrl: string = ((import.meta as any).env?.VITE_API_URL as string) || "";
+const rawUrl: string = ((import.meta as any).env?.VITE_API_URL as string) || "http://127.0.0.1:8000/api/v1";
 
-export const API_BASE_URL: string = rawUrl.replace(/\/+$/, "");
+// Ensure localhost is normalized to 127.0.0.1 on local environments to prevent macOS IPv6 ::1 lookup timeouts
+const normalizedUrl = rawUrl.replace("://localhost:", "://127.0.0.1:");
+export const API_BASE_URL: string = normalizedUrl.replace(/\/+$/, "");
 
 export interface ApiResponse<T> {
   success: boolean;
@@ -39,7 +41,8 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 
   const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 5000);
+  const timeoutMs = 12000;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const res = await fetch(`${API_BASE_URL}${cleanEndpoint}`, {
@@ -62,7 +65,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   } catch (error) {
     clearTimeout(timeoutId);
     if (error instanceof Error && error.name === "AbortError") {
-      console.warn(`[API] Request to ${endpoint} timed out after 5s`);
+      console.warn(`[API] Request to ${endpoint} timed out after ${timeoutMs / 1000}s`);
       throw new Error("Backend unavailable — request timed out");
     }
     console.warn(`[BusinessOSAI API] Request to ${endpoint} fallback:`, error);
@@ -213,7 +216,7 @@ export const AppointmentService = {
 export const CRMService = {
   getCustomers: (params?: { search?: string; tier?: string; segment?: string; branch_id?: string }) =>
     request<any[]>(`/crm/customers?${new URLSearchParams(params as any).toString()}`),
-  
+
   createCustomer: (customerData: {
     name: string;
     phone: string;
@@ -222,11 +225,17 @@ export const CRMService = {
     tier?: string;
     notes?: string;
     preferred_branch_id?: string;
-  }) =>
-    request<any>("/crm/customers", {
+  }) => {
+    const payload = {
+      ...customerData,
+      email: customerData.email?.trim() || undefined,
+      preferred_branch_id: customerData.preferred_branch_id?.trim() || undefined,
+    };
+    return request<any>("/crm/customers", {
       method: "POST",
-      body: JSON.stringify(customerData),
-    }),
+      body: JSON.stringify(payload),
+    });
+  },
 
   updateCustomer: (customerId: string, customerData: any) =>
     request<any>(`/crm/customers/${customerId}`, {
@@ -248,6 +257,47 @@ export const CRMService = {
   getMemberships: () =>
     request<any[]>("/crm_modules/memberships"),
 
+  createMembership: (tierData: any) =>
+    request<any>("/crm_modules/memberships", {
+      method: "POST",
+      body: JSON.stringify(tierData),
+    }),
+
+  deleteMembership: (tierId: string) =>
+    request<{ success: boolean; message: string }>(`/crm_modules/memberships/${tierId}`, {
+      method: "DELETE",
+    }),
+
+  enrollMembership: (enrollData: { customer_id: string; tier_id: string; payment_method?: string }) =>
+    request<any>("/crm_modules/memberships/enroll", {
+      method: "POST",
+      body: JSON.stringify(enrollData),
+    }),
+
+  getWalletPacks: () =>
+    request<{
+      id: string;
+      name: string;
+      amount: number;
+      bonus: number;
+      badge?: string;
+      is_popular?: boolean;
+      display_order?: number;
+    }[]>("/crm_modules/wallet/packs"),
+
+  createWalletPack: (packData: {
+    name: string;
+    amount: number;
+    bonus?: number;
+    badge?: string;
+    is_popular?: boolean;
+    display_order?: number;
+  }) =>
+    request<any>("/crm_modules/wallet/packs", {
+      method: "POST",
+      body: JSON.stringify(packData),
+    }),
+
   getWalletBalance: (customerId: string) =>
     request<{ balance: number; currency: string; history: any[] }>(`/crm_modules/wallet/${customerId}`),
 
@@ -262,7 +312,7 @@ export const CRMService = {
       method: "POST",
       body: JSON.stringify({ phone, template, variables }),
     }),
-  
+
   getLeads: () => request<any[]>("/crm/leads"),
 };
 
@@ -325,6 +375,22 @@ export const HRMSService = {
     request<{ status: string; timestamp: string; active_shift_hours: number }>("/hrms/attendance/clock", {
       method: "POST",
       body: JSON.stringify({ staff_id: staffId, action }),
+    }),
+
+  getAttendanceRecords: (date?: string, employeeId?: string) =>
+    request<any[]>(`/hrms/attendance?${new URLSearchParams({ ...(date ? { date } : {}), ...(employeeId ? { employee_id: employeeId } : {}) }).toString()}`),
+
+  createAttendanceRecord: (record: {
+    employee_id: string;
+    date: string;
+    check_in: string;
+    check_out?: string;
+    status: string;
+    working_hours?: number;
+  }) =>
+    request<any>("/hrms/attendance", {
+      method: "POST",
+      body: JSON.stringify(record),
     }),
 
   getPayrollSlips: (staffId?: string, month?: string) =>
@@ -606,7 +672,7 @@ export const PettyCashService = {
       method: "POST",
       body: JSON.stringify(sessionData),
     }),
-  closeSession: (sessionId: string, closeData: { closed_by: string; closing_cash: number; notes?: string }) =>
+  closeSession: (sessionId: string, closeData: { closed_by: string; closing_cash: number; expected_cash?: number; cash_difference?: number; notes?: string }) =>
     request<any>(`/pos/sessions/${sessionId}/close`, {
       method: "POST",
       body: JSON.stringify(closeData),

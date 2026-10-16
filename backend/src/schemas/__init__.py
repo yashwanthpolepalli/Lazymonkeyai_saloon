@@ -9,6 +9,7 @@ from src.schemas.salon import (
 from src.schemas.customer import (
     CustomerCreate, CustomerUpdate, CustomerResponse,
     WalletTopUpRequest, WalletBalanceResponse,
+    WalletTopUpPackCreate, WalletTopUpPackResponse,
     MembershipTierCreate, MembershipTierResponse
 )
 from src.schemas.appointment import (

@@ -166,13 +166,15 @@ export default function Home() {
             <>
               {activeSubTab === "dashboard" && <OwnerDashboardView />}
               {activeSubTab === "customers" && <OwnerCustomersView />}
-              {activeSubTab === "pos" && <OwnerPOSView />}
+              {["pos", "billing", "newsale"].includes(activeSubTab) && <OwnerPOSView />}
               {activeSubTab === "services" && <OwnerServicesView />}
               {activeSubTab === "inventory" && <OwnerInventoryView />}
               {![
                 "dashboard",
                 "customers",
                 "pos",
+                "billing",
+                "newsale",
                 "services",
                 "inventory",
               ].includes(activeSubTab) && <OwnerDashboardView />}
@@ -184,7 +186,7 @@ export default function Home() {
             <>
               {activeSubTab === "dashboard" && <OwnerDashboardView />}
               {activeSubTab === "customers" && <OwnerCustomersView />}
-              {activeSubTab === "pos" && <OwnerPOSView />}
+              {["pos", "billing", "newsale"].includes(activeSubTab) && <OwnerPOSView />}
               {activeSubTab === "inventory" && <OwnerInventoryView />}
               {[
                 "staff",
@@ -203,6 +205,8 @@ export default function Home() {
                 "dashboard",
                 "customers",
                 "pos",
+                "billing",
+                "newsale",
                 "inventory",
                 "staff",
                 "employees",
@@ -245,11 +249,19 @@ export default function Home() {
                 "payroll_processing",
                 "commissions",
               ].includes(activeSubTab) && <OwnerStaffView />}
-              {activeSubTab === "pos" && <OwnerPOSView />}
+              {["pos", "billing", "newsale"].includes(activeSubTab) && <OwnerPOSView />}
               {activeSubTab === "services" && <OwnerServicesView />}
               {activeSubTab === "memberships" && <OwnerMembershipsView />}
               {activeSubTab === "inventory" && <OwnerInventoryView />}
-              {activeSubTab === "settings" && <OwnerSettingsView initialTab="branches" />}
+              {["settings", "profile", "branches", "customizations", "mfa", "discounts", "governance", "data-hub", "integrations"].includes(activeSubTab) && (
+                <OwnerSettingsView
+                  initialTab={
+                    (["profile", "branches", "customizations", "mfa", "discounts", "governance", "data-hub", "integrations"].includes(activeSubTab)
+                      ? (activeSubTab as any)
+                      : "branches")
+                  }
+                />
+              )}
               {![
                 "dashboard",
                 "customers",
@@ -260,10 +272,20 @@ export default function Home() {
                 "leaves",
                 "payroll",
                 "pos",
+                "billing",
+                "newsale",
                 "services",
                 "memberships",
                 "inventory",
                 "settings",
+                "profile",
+                "branches",
+                "customizations",
+                "mfa",
+                "discounts",
+                "governance",
+                "data-hub",
+                "integrations",
               ].includes(activeSubTab) && <OwnerDashboardView />}
             </>
           )}
@@ -305,12 +327,20 @@ export default function Home() {
                 "bonuses",
                 "commissions",
               ].includes(activeSubTab) && <OwnerStaffView />}
-              {activeSubTab === "pos" && <OwnerPOSView />}
+              {["pos", "billing", "newsale"].includes(activeSubTab) && <OwnerPOSView />}
               {activeSubTab === "services" && <OwnerServicesView />}
               {activeSubTab === "memberships" && <OwnerMembershipsView />}
               {activeSubTab === "inventory" && <OwnerInventoryView />}
               {activeSubTab === "governance" && <OwnerSettingsView initialTab="governance" />}
-              {activeSubTab === "settings" && <OwnerSettingsView initialTab="profile" />}
+              {["settings", "profile", "branches", "customizations", "mfa", "discounts", "data-hub", "integrations"].includes(activeSubTab) && (
+                <OwnerSettingsView
+                  initialTab={
+                    (["profile", "branches", "customizations", "mfa", "discounts", "data-hub", "integrations"].includes(activeSubTab)
+                      ? (activeSubTab as any)
+                      : "profile")
+                  }
+                />
+              )}
               {![
                 "dashboard",
                 "customers",
@@ -342,11 +372,20 @@ export default function Home() {
                 "bonuses",
                 "commissions",
                 "pos",
+                "billing",
+                "newsale",
                 "services",
                 "memberships",
                 "inventory",
                 "governance",
                 "settings",
+                "profile",
+                "branches",
+                "customizations",
+                "mfa",
+                "discounts",
+                "data-hub",
+                "integrations",
               ].includes(activeSubTab) && <OwnerDashboardView />}
             </>
           )}

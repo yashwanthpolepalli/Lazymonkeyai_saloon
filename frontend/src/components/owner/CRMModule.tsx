@@ -97,12 +97,17 @@ export function CRMModule() {
                         : "bg-white border-stone-200 hover:border-stone-300"
                     }`}
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={c.avatar}
-                      alt={c.name}
-                      className="w-10 h-10 rounded-full object-cover shrink-0"
-                    />
+                    {c.avatar && !c.avatar.includes("unsplash.com") ? (
+                      <img
+                        src={c.avatar}
+                        alt={c.name}
+                        className="w-10 h-10 rounded-full object-cover shrink-0"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-amber-500/10 border border-amber-300 flex items-center justify-center text-amber-700 font-bold text-xs shrink-0">
+                        {(c.name || "C").charAt(0).toUpperCase()}
+                      </div>
+                    )}
                     <div className="min-w-0 flex-1">
                       <div className="font-semibold text-xs text-stone-900 truncate">{c.name}</div>
                       <div className="text-[11px] text-stone-500">{c.phone}</div>
@@ -121,12 +126,17 @@ export function CRMModule() {
             <Card variant="luxury" className="p-6 lg:col-span-2 border-stone-200/80 space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 pb-4">
                 <div className="flex items-center gap-4">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={selectedCust360.avatar}
-                    alt={selectedCust360.name}
-                    className="w-16 h-16 rounded-2xl object-cover border-2 border-amber-400"
-                  />
+                  {selectedCust360.avatar && !selectedCust360.avatar.includes("unsplash.com") ? (
+                    <img
+                      src={selectedCust360.avatar}
+                      alt={selectedCust360.name}
+                      className="w-16 h-16 rounded-2xl object-cover border-2 border-amber-400"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border-2 border-amber-400 flex items-center justify-center text-amber-700 font-bold text-xl">
+                      {(selectedCust360.name || "C").charAt(0).toUpperCase()}
+                    </div>
+                  )}
                   <div>
                     <div className="flex items-center gap-2">
                       <h3 className="text-lg font-bold text-stone-900">

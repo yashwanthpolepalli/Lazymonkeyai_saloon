@@ -105,3 +105,16 @@ class GiftVoucher(TimeStampedModel):
     notes = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True)
 
+
+class WalletTopUpPack(TimeStampedModel):
+    __tablename__ = "wallet_topup_packs"
+
+    name = Column(String(100), nullable=False) # e.g. "Starter Luxe Pack"
+    amount = Column(Float, nullable=False) # e.g. 2000.0
+    bonus = Column(Float, default=0.0) # e.g. 200.0
+    badge = Column(String(50), nullable=True) # e.g. "+10% Free"
+    is_popular = Column(Boolean, default=False)
+    display_order = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)
+
+

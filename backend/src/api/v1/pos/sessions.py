@@ -16,6 +16,8 @@ class OpenSessionRequest(BaseModel):
 class CloseSessionRequest(BaseModel):
     closed_by: str
     closing_cash: float
+    expected_cash: Optional[float] = None
+    cash_difference: Optional[float] = None
     notes: Optional[str] = None
 
 @router.get("/active/{branch_id}")
@@ -49,9 +51,11 @@ def close_register_session(session_id: str, req: CloseSessionRequest, db: Sessio
     
     session.closed_by = req.closed_by
     session.closing_cash = req.closing_cash
-    session.cash_difference = req.closing_cash - (session.opening_cash + session.total_sales)
+    session.expected_cash = req.expected_cash if req.expected_cash is not None else (session.opening_cash + session.total_sales)
+    session.cash_difference = req.cash_difference if req.cash_difference is not None else (req.closing_cash - session.expected_cash)
     session.notes = req.notes
     session.status = "closed"
     db.commit()
     db.refresh(session)
     return session
+

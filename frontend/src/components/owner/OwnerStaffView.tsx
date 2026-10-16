@@ -65,12 +65,12 @@ export function OwnerStaffView() {
   // Active HRMS Subtab Section
   const currentTab =
     activeSubTab === "attendance" ||
-    activeSubTab === "daily_attendance" ||
-    activeSubTab === "biometric" ||
-    activeSubTab === "face_recognition" ||
-    activeSubTab === "gps_attendance" ||
-    activeSubTab === "shift_attendance" ||
-    activeSubTab === "attendance_corrections"
+      activeSubTab === "daily_attendance" ||
+      activeSubTab === "biometric" ||
+      activeSubTab === "face_recognition" ||
+      activeSubTab === "gps_attendance" ||
+      activeSubTab === "shift_attendance" ||
+      activeSubTab === "attendance_corrections"
       ? "attendance"
       : activeSubTab === "leave" ||
         activeSubTab === "leaves" ||
@@ -78,21 +78,21 @@ export function OwnerStaffView() {
         activeSubTab === "leave_balances" ||
         activeSubTab === "leave_policy" ||
         activeSubTab === "holidays"
-      ? "leave"
-      : activeSubTab === "payroll" ||
-        activeSubTab === "salary_structure" ||
-        activeSubTab === "payroll_processing" ||
-        activeSubTab === "pf" ||
-        activeSubTab === "esi" ||
-        activeSubTab === "tds" ||
-        activeSubTab === "payslips" ||
-        activeSubTab === "payslip_studio" ||
-        activeSubTab === "loans" ||
-        activeSubTab === "advances" ||
-        activeSubTab === "bonuses" ||
-        activeSubTab === "commissions"
-      ? "payroll"
-      : "employees";
+        ? "leave"
+        : activeSubTab === "payroll" ||
+          activeSubTab === "salary_structure" ||
+          activeSubTab === "payroll_processing" ||
+          activeSubTab === "pf" ||
+          activeSubTab === "esi" ||
+          activeSubTab === "tds" ||
+          activeSubTab === "payslips" ||
+          activeSubTab === "payslip_studio" ||
+          activeSubTab === "loans" ||
+          activeSubTab === "advances" ||
+          activeSubTab === "bonuses" ||
+          activeSubTab === "commissions"
+          ? "payroll"
+          : "employees";
 
   // Attendance view toggle
   const [attendanceViewMode, setAttendanceViewMode] = useState<"table" | "calendar">("table");
@@ -169,33 +169,33 @@ export function OwnerStaffView() {
 
   // New Employee Form State
   const [empName, setEmpName] = useState("");
-  const [empCode, setEmpCode] = useState(`EMP-000${employees.length + 1}`);
+  const [empCode, setEmpCode] = useState("");
   const [empEmail, setEmpEmail] = useState("");
-  const [empRole, setEmpRole] = useState("Senior Stylist");
+  const [empRole, setEmpRole] = useState("");
   const [empDept, setEmpDept] = useState<Employee["department"]>("Hair Styling");
-  const [empReporting, setEmpReporting] = useState("Org Admin");
+  const [empReporting, setEmpReporting] = useState("");
   const [empType, setEmpType] = useState<"Full-Time" | "Part-Time" | "Contract">("Full-Time");
-  const [empSalary, setEmpSalary] = useState("35000");
+  const [empSalary, setEmpSalary] = useState("");
 
   // Leave Form State (Screenshot 3)
   const [leaveEmpId, setLeaveEmpId] = useState(employees[0]?.id || "");
   const [leaveCategory, setLeaveCategory] = useState("Annual");
-  const [leaveFromDate, setLeaveFromDate] = useState("2026-09-10");
-  const [leaveToDate, setLeaveToDate] = useState("2026-09-11");
+  const [leaveFromDate, setLeaveFromDate] = useState(new Date().toISOString().split("T")[0]);
+  const [leaveToDate, setLeaveToDate] = useState(new Date().toISOString().split("T")[0]);
   const [leaveDaysReq, setLeaveDaysReq] = useState("1");
   const [leaveApprovalAction, setLeaveApprovalAction] = useState("Auto-Approve Immediate");
   const [leaveReason, setLeaveReason] = useState("");
 
-  // Manual Punch State (Image 2 Replica)
-  const [punchEmpId, setPunchEmpId] = useState(employees[0]?.id || "");
-  const [punchDate, setPunchDate] = useState("05/09/2026");
+  // Manual Punch State
+  const [punchEmpId, setPunchEmpId] = useState("");
+  const [punchDate, setPunchDate] = useState(new Date().toLocaleDateString("en-GB"));
   const [punchStatus, setPunchStatus] = useState("Present");
-  const [punchCheckIn, setPunchCheckIn] = useState("09:00 AM");
-  const [punchCheckOut, setPunchCheckOut] = useState("06:00 PM");
-  const [punchMethod, setPunchMethod] = useState("Manual Entry (HR Verified)");
-  const [punchNotes, setPunchNotes] = useState("Direct administrative timesheet record");
+  const [punchCheckIn, setPunchCheckIn] = useState("");
+  const [punchCheckOut, setPunchCheckOut] = useState("");
+  const [punchMethod, setPunchMethod] = useState("Manual Entry");
+  const [punchNotes, setPunchNotes] = useState("");
 
-  // Dynamic Timesheet Records (Live initial records for all employees)
+  // Dynamic Timesheet Records (Empty default until fetched from HRMS or manually recorded)
   const [timesheetRecords, setTimesheetRecords] = useState<
     Array<{
       id: string;
@@ -210,21 +210,35 @@ export function OwnerStaffView() {
       notes: string;
       date: string;
     }>
-  >(() => {
-    return employees.map((emp, idx) => ({
-      id: `att_${emp.id || idx}`,
-      empId: emp.id,
-      empName: emp.name,
-      role: emp.designation || emp.role || "Stylist",
-      checkIn: "09:00 AM",
-      checkOut: "06:00 PM",
-      hoursWorked: "8.0 hrs",
-      punchMethod: "Biometric Device",
-      status: "Present",
-      notes: "Attendance verified",
-      date: new Date().toLocaleDateString("en-GB"),
-    }));
-  });
+  >([]);
+
+  // Asynchronously fetch live attendance records from Backend API & PostgreSQL
+  useEffect(() => {
+    HRMSService.getAttendanceRecords()
+      .then((records) => {
+        if (Array.isArray(records) && records.length > 0) {
+          setTimesheetRecords(
+            records.map((r: any) => {
+              const matchedEmp = employees.find((e) => e.id === r.employee_id);
+              return {
+                id: r.id || `att_${r.employee_id}_${r.date}`,
+                empId: r.employee_id,
+                empName: r.employee_name || matchedEmp?.name || "Staff",
+                role: matchedEmp?.designation || matchedEmp?.role || "",
+                checkIn: r.check_in || "—",
+                checkOut: r.check_out || "—",
+                hoursWorked: r.working_hours ? `${r.working_hours} hrs` : "—",
+                punchMethod: "System Clock",
+                status: r.status === "present" ? "Present" : r.status || "Present",
+                notes: "",
+                date: r.date || "",
+              };
+            })
+          );
+        }
+      })
+      .catch(() => { });
+  }, [employees]);
 
   // Map Salary Modal State & Live Auto-Formulas
   const [salaryEmpId, setSalaryEmpId] = useState(employees[0]?.id || "");
@@ -245,7 +259,7 @@ export function OwnerStaffView() {
     const pf = num * 0.12;
     const gross = num + hra + otherAllow;
     const esi = Math.round(gross * 0.0075 * 10) / 10;
-    const tds = num >= 25000 ? 500 : 0;
+    const tds = num >= 2 ? 500 : 0;
     const other = 50;
 
     setHraVal(hra.toString());
@@ -294,8 +308,8 @@ export function OwnerStaffView() {
 
     addEmployee({
       name: empName.trim(),
-      code: empCode.trim() || `EMP-000${employees.length + 1}`,
-      email: empEmail.trim() || `${empName.toLowerCase().replace(/\s+/g, "")}@example.com`,
+      code: empCode.trim() || "",
+      email: empEmail.trim(),
       department: empDept,
       designation: "—",
       role: empRole,
@@ -303,12 +317,12 @@ export function OwnerStaffView() {
       employmentType: empType,
       joinDate: new Date().toLocaleDateString("en-GB"),
       status: "active",
-      salaryBase: Number(empSalary) || 35000,
-      basicSalary: Number(empSalary) || 35000,
-      hra: (Number(empSalary) || 35000) * 0.4,
-      allowances: 3500,
-      statutoryDed: 3100,
-      netTakeHome: (Number(empSalary) || 35000) * 1.4 - 3100,
+      salaryBase: Number(empSalary) || 0,
+      basicSalary: Number(empSalary) || 0,
+      hra: (Number(empSalary) || 0) * 0.4,
+      allowances: 0,
+      statutoryDed: 0,
+      netTakeHome: Number(empSalary) || 0,
     });
 
     addToast("success", "Employee Enrolled", `${empName} added to directory.`);
@@ -336,24 +350,69 @@ export function OwnerStaffView() {
 
   const handleSavePunch = (e: React.FormEvent) => {
     e.preventDefault();
-    const emp = employees.find((e) => e.id === punchEmpId) || employees[0];
-    const empName = emp ? emp.name : "Employee";
+    const emp = employees.find((e) => e.id === punchEmpId);
+    if (!emp) {
+      addToast("warning", "Select Employee", "Please select an employee profile.");
+      return;
+    }
+    const empName = emp.name;
+
+    // Dynamically calculate hours worked from check-in and check-out
+    let calculatedHours = "—";
+    let numericHours = 0;
+    if (punchCheckIn && punchCheckOut) {
+      try {
+        const parseTime = (t: string) => {
+          const parts = t.match(/(\d+):(\d+)\s*(AM|PM)?/i);
+          if (!parts) return null;
+          let h = parseInt(parts[1], 10);
+          const m = parseInt(parts[2], 10);
+          const mer = parts[3]?.toUpperCase();
+          if (mer === "PM" && h < 12) h += 12;
+          if (mer === "AM" && h === 12) h = 0;
+          return h * 60 + m;
+        };
+        const inMin = parseTime(punchCheckIn);
+        const outMin = parseTime(punchCheckOut);
+        if (inMin !== null && outMin !== null && outMin >= inMin) {
+          numericHours = Math.round(((outMin - inMin) / 60) * 10) / 10;
+          calculatedHours = `${numericHours} hrs`;
+        }
+      } catch {
+        calculatedHours = "—";
+      }
+    }
 
     const newRecord = {
       id: `ATT-${Date.now()}`,
-      empId: emp?.id || "EMP-001",
+      empId: emp.id,
       empName: empName,
-      checkIn: punchCheckIn || "09:00 AM",
-      checkOut: punchCheckOut || "06:00 PM",
-      hoursWorked: "9.0 hrs",
-      punchMethod: punchMethod || "Manual Entry (HR Verified)",
+      role: emp.designation || emp.role || "",
+      checkIn: punchCheckIn || "—",
+      checkOut: punchCheckOut || "—",
+      hoursWorked: calculatedHours,
+      punchMethod: punchMethod || "Manual Entry",
       status: punchStatus || "Present",
-      notes: punchNotes || "Direct administrative timesheet record",
-      date: punchDate || "05/09/2026",
+      notes: punchNotes || "",
+      date: punchDate || new Date().toLocaleDateString("en-GB"),
     };
 
     setTimesheetRecords((prev) => [newRecord, ...prev]);
+
+    // Asynchronously synchronize with Backend API & PostgreSQL
+    HRMSService.createAttendanceRecord({
+      employee_id: emp.id,
+      date: newRecord.date,
+      check_in: newRecord.checkIn,
+      check_out: newRecord.checkOut,
+      status: (punchStatus || "present").toLowerCase(),
+      working_hours: numericHours,
+    }).catch(() => { });
+
     addToast("success", "Attendance Recorded", `Timesheet punch saved for ${empName}.`);
+    setPunchCheckIn("");
+    setPunchCheckOut("");
+    setPunchNotes("");
     setIsManualPunchOpen(false);
   };
 
@@ -375,18 +434,16 @@ export function OwnerStaffView() {
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar w-full sm:w-auto">
           <button
             onClick={() => setActiveSubTab("employees")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-              currentTab === "employees"
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${currentTab === "employees"
                 ? "bg-sky-500 text-white shadow-md shadow-sky-500/20 font-bold"
                 : "bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200/80"
-            }`}
+              }`}
           >
             <Users className="w-3.5 h-3.5" />
             <span>Staff Enrollment / Employees</span>
             <span
-              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                currentTab === "employees" ? "bg-white/20 text-white" : "bg-slate-200 text-slate-700"
-              }`}
+              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${currentTab === "employees" ? "bg-white/20 text-white" : "bg-slate-200 text-slate-700"
+                }`}
             >
               {employees.length}
             </span>
@@ -394,18 +451,16 @@ export function OwnerStaffView() {
 
           <button
             onClick={() => setActiveSubTab("daily_attendance")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-              currentTab === "attendance"
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${currentTab === "attendance"
                 ? "bg-sky-500 text-white shadow-md shadow-sky-500/20 font-bold"
                 : "bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200/80"
-            }`}
+              }`}
           >
             <Clock className="w-3.5 h-3.5" />
             <span>Attendance & Timesheets</span>
             <span
-              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                currentTab === "attendance" ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-800"
-              }`}
+              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${currentTab === "attendance" ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-800"
+                }`}
             >
               Live
             </span>
@@ -413,18 +468,16 @@ export function OwnerStaffView() {
 
           <button
             onClick={() => setActiveSubTab("leave_requests")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-              currentTab === "leave"
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${currentTab === "leave"
                 ? "bg-sky-500 text-white shadow-md shadow-sky-500/20 font-bold"
                 : "bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200/80"
-            }`}
+              }`}
           >
             <CalendarDays className="w-3.5 h-3.5" />
             <span>Leave Management</span>
             <span
-              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                currentTab === "leave" ? "bg-white/20 text-white" : "bg-amber-100 text-amber-800"
-              }`}
+              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${currentTab === "leave" ? "bg-white/20 text-white" : "bg-amber-100 text-amber-800"
+                }`}
             >
               {leaves.length}
             </span>
@@ -432,18 +485,16 @@ export function OwnerStaffView() {
 
           <button
             onClick={() => setActiveSubTab("salary_structure")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-              currentTab === "payroll"
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${currentTab === "payroll"
                 ? "bg-sky-500 text-white shadow-md shadow-sky-500/20 font-bold"
                 : "bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200/80"
-            }`}
+              }`}
           >
             <DollarSign className="w-3.5 h-3.5" />
             <span>Payroll & Salary Structure</span>
             <span
-              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                currentTab === "payroll" ? "bg-white/20 text-white" : "bg-purple-100 text-purple-800"
-              }`}
+              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${currentTab === "payroll" ? "bg-white/20 text-white" : "bg-purple-100 text-purple-800"
+                }`}
             >
               Auto
             </span>
@@ -601,20 +652,19 @@ export function OwnerStaffView() {
                 <tbody className="divide-y divide-slate-100">
                   {filteredEmployees.map((emp) => {
                     const initials = emp.name
-                        ? emp.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")
-                          .substring(0, 3)
-                          .toUpperCase()
+                      ? emp.name
+                        .split(" ")
+                        .map((n) => n[0])
+                        .join("")
+                        .substring(0, 3)
+                        .toUpperCase()
                       : "EMP";
 
                     return (
                       <tr
                         key={emp.id}
-                        className={`hover:bg-slate-50/80 transition-colors ${
-                          selectedEmployeeIds.has(emp.id) ? "bg-rose-50/30" : ""
-                        }`}
+                        className={`hover:bg-slate-50/80 transition-colors ${selectedEmployeeIds.has(emp.id) ? "bg-rose-50/30" : ""
+                          }`}
                       >
                         <td className="py-3 px-3 w-10 text-center">
                           <input
@@ -710,11 +760,10 @@ export function OwnerStaffView() {
           <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
             <button
               onClick={() => setActiveSubTab("daily_attendance")}
-              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                activeSubTab === "daily_attendance" || activeSubTab === "attendance"
+              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${activeSubTab === "daily_attendance" || activeSubTab === "attendance"
                   ? "bg-[#7c3aed] text-white shadow-xs"
                   : "bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/90 shadow-xs"
-              }`}
+                }`}
             >
               <Clock className="w-3.5 h-3.5" />
               <span>Daily Attendance</span>
@@ -725,11 +774,10 @@ export function OwnerStaffView() {
                 setActiveSubTab("biometric");
                 addToast("info", "Biometric Sync", "Connecting to Salon Biometric devices...");
               }}
-              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                activeSubTab === "biometric"
+              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${activeSubTab === "biometric"
                   ? "bg-[#7c3aed] text-white shadow-xs"
                   : "bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/90 shadow-xs"
-              }`}
+                }`}
             >
               <Fingerprint className="w-3.5 h-3.5 text-slate-500" />
               <span>Biometric</span>
@@ -740,11 +788,10 @@ export function OwnerStaffView() {
                 setActiveSubTab("face_recognition");
                 addToast("info", "Face Recognition", "AI Face camera stream ready.");
               }}
-              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                activeSubTab === "face_recognition"
+              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${activeSubTab === "face_recognition"
                   ? "bg-[#7c3aed] text-white shadow-xs"
                   : "bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/90 shadow-xs"
-              }`}
+                }`}
             >
               <UserCheck className="w-3.5 h-3.5 text-slate-500" />
               <span>Face Recognition</span>
@@ -755,11 +802,10 @@ export function OwnerStaffView() {
                 setActiveSubTab("gps_attendance");
                 addToast("info", "GPS Geo-Fence", "Salon branch geo-fence perimeter active.");
               }}
-              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                activeSubTab === "gps_attendance"
+              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${activeSubTab === "gps_attendance"
                   ? "bg-[#7c3aed] text-white shadow-xs"
                   : "bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/90 shadow-xs"
-              }`}
+                }`}
             >
               <MapPin className="w-3.5 h-3.5 text-slate-500" />
               <span>GPS Attendance</span>
@@ -770,11 +816,10 @@ export function OwnerStaffView() {
                 setActiveSubTab("shift_attendance");
                 addToast("info", "Shift Attendance", "Displaying morning, evening and flexi shifts.");
               }}
-              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                activeSubTab === "shift_attendance"
+              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${activeSubTab === "shift_attendance"
                   ? "bg-[#7c3aed] text-white shadow-xs"
                   : "bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/90 shadow-xs"
-              }`}
+                }`}
             >
               <Clock className="w-3.5 h-3.5 text-slate-500" />
               <span>Shift Attendance</span>
@@ -785,11 +830,10 @@ export function OwnerStaffView() {
                 setActiveSubTab("attendance_corrections");
                 addToast("info", "Attendance Corrections", "Pending staff correction requests.");
               }}
-              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                activeSubTab === "attendance_corrections"
+              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${activeSubTab === "attendance_corrections"
                   ? "bg-[#7c3aed] text-white shadow-xs"
                   : "bg-white hover:bg-slate-50 text-slate-700 border border-slate-200/90 shadow-xs"
-              }`}
+                }`}
             >
               <FileText className="w-3.5 h-3.5 text-slate-500" />
               <span>Attendance Corrections</span>
@@ -810,18 +854,16 @@ export function OwnerStaffView() {
               <div className="flex items-center rounded-full border border-slate-200 bg-white p-0.5 shadow-xs">
                 <button
                   onClick={() => setAttendanceViewMode("table")}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
-                    attendanceViewMode === "table" ? "bg-slate-100 text-slate-900 font-bold" : "text-slate-500 hover:text-slate-700"
-                  }`}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${attendanceViewMode === "table" ? "bg-slate-100 text-slate-900 font-bold" : "text-slate-500 hover:text-slate-700"
+                    }`}
                 >
                   <FileSpreadsheet className="w-3.5 h-3.5 text-slate-500" />
                   <span>Table View</span>
                 </button>
                 <button
                   onClick={() => setAttendanceViewMode("calendar")}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
-                    attendanceViewMode === "calendar" ? "bg-slate-100 text-slate-900 font-bold" : "text-slate-500 hover:text-slate-700"
-                  }`}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${attendanceViewMode === "calendar" ? "bg-slate-100 text-slate-900 font-bold" : "text-slate-500 hover:text-slate-700"
+                    }`}
                 >
                   <Calendar className="w-3.5 h-3.5 text-slate-500" />
                   <span>Calendar View</span>
@@ -837,14 +879,20 @@ export function OwnerStaffView() {
               </button>
 
               <button
-                onClick={() => addToast("success", "WFH Clock In", "WFH Clock In recorded at 09:00 AM.")}
+                onClick={() => {
+                  const nowStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                  addToast("success", "WFH Clock In", `WFH Clock In recorded at ${nowStr}.`);
+                }}
                 className="flex items-center gap-1 px-4 py-2 rounded-full border border-emerald-400 bg-white hover:bg-emerald-50 text-emerald-600 text-xs font-semibold shadow-xs cursor-pointer transition-colors"
               >
                 <span>WFH Clock In</span>
               </button>
 
               <button
-                onClick={() => addToast("info", "WFH Clock Out", "WFH Clock Out recorded at 06:00 PM.")}
+                onClick={() => {
+                  const nowStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                  addToast("info", "WFH Clock Out", `WFH Clock Out recorded at ${nowStr}.`);
+                }}
                 className="flex items-center gap-1 px-4 py-2 rounded-full border border-rose-400 bg-white hover:bg-rose-50 text-rose-600 text-xs font-semibold shadow-xs cursor-pointer transition-colors"
               >
                 <span>WFH Clock Out</span>
@@ -889,10 +937,10 @@ export function OwnerStaffView() {
               <div className="text-3xl font-extrabold text-[#0284c7]">
                 {timesheetRecords.length > 0
                   ? `${Math.round(
-                      (timesheetRecords.filter((r) => r.status === "Present").length /
-                        timesheetRecords.length) *
-                        100
-                    )}%`
+                    (timesheetRecords.filter((r) => r.status === "Present").length /
+                      timesheetRecords.length) *
+                    100
+                  )}%`
                   : "0%"}
               </div>
               <div className="text-[10px] font-bold text-[#075985] uppercase tracking-wider">
@@ -958,22 +1006,20 @@ export function OwnerStaffView() {
                           </td>
                           <td className="py-3.5 px-6">
                             <span
-                              className={`px-2.5 py-1 rounded-full text-[11px] font-semibold inline-flex items-center gap-1.5 ${
-                                rec.status === "Present"
+                              className={`px-2.5 py-1 rounded-full text-[11px] font-semibold inline-flex items-center gap-1.5 ${rec.status === "Present"
                                   ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                                   : rec.status === "Absent"
-                                  ? "bg-rose-50 text-rose-700 border border-rose-200"
-                                  : "bg-amber-50 text-amber-700 border border-amber-200"
-                              }`}
+                                    ? "bg-rose-50 text-rose-700 border border-rose-200"
+                                    : "bg-amber-50 text-amber-700 border border-amber-200"
+                                }`}
                             >
                               <span
-                                className={`w-1.5 h-1.5 rounded-full ${
-                                  rec.status === "Present"
+                                className={`w-1.5 h-1.5 rounded-full ${rec.status === "Present"
                                     ? "bg-emerald-500"
                                     : rec.status === "Absent"
-                                    ? "bg-rose-500"
-                                    : "bg-amber-500"
-                                }`}
+                                      ? "bg-rose-500"
+                                      : "bg-amber-500"
+                                  }`}
                               ></span>
                               {rec.status}
                             </span>
@@ -1019,10 +1065,12 @@ export function OwnerStaffView() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Calendar className="w-5 h-5 text-purple-600" />
-                  <h3 className="font-bold text-sm text-slate-900">September 2026 Attendance Grid</h3>
+                  <h3 className="font-bold text-sm text-slate-900">
+                    {new Date().toLocaleString("default", { month: "long" })} {new Date().getFullYear()} Attendance Grid
+                  </h3>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-slate-500">
-                  <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> Present (100%)</span>
+                  <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> Present</span>
                   <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-rose-500"></span> Absent</span>
                   <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-purple-500"></span> On Leave</span>
                 </div>
@@ -1034,17 +1082,27 @@ export function OwnerStaffView() {
                     {day}
                   </div>
                 ))}
-                {Array.from({ length: 30 }).map((_, i) => {
+                {Array.from({ length: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate() }).map((_, i) => {
                   const dayNum = i + 1;
-                  const isToday = dayNum === 5;
+                  const isToday = dayNum === new Date().getDate();
+                  const dateStrPadded = `${String(dayNum).padStart(2, "0")}/${String(new Date().getMonth() + 1).padStart(2, "0")}/${new Date().getFullYear()}`;
+                  const dayRecords = timesheetRecords.filter(
+                    (r) =>
+                      r.date === dateStrPadded ||
+                      r.date.startsWith(
+                        `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`
+                      )
+                  );
+                  const presentCount = dayRecords.filter((r) => r.status.toLowerCase() === "present").length;
+                  const percentage = employees.length > 0 ? Math.round((presentCount / employees.length) * 100) : 0;
+
                   return (
                     <div
                       key={dayNum}
-                      className={`p-2.5 rounded-xl border transition-all text-left min-h-[68px] flex flex-col justify-between ${
-                        isToday
+                      className={`p-2.5 rounded-xl border transition-all text-left min-h-[68px] flex flex-col justify-between ${isToday
                           ? "bg-purple-50/60 border-purple-300 ring-1 ring-purple-400"
                           : "bg-slate-50/50 border-slate-200/70 hover:bg-slate-50"
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center justify-between">
                         <span className={`text-xs font-bold ${isToday ? "text-purple-700" : "text-slate-700"}`}>
@@ -1057,8 +1115,12 @@ export function OwnerStaffView() {
                         )}
                       </div>
                       <div className="flex items-center justify-between text-[10px] text-slate-500">
-                        <span className="font-semibold text-emerald-600">6 Present</span>
-                        <span className="text-[9px] text-slate-400 font-mono">100%</span>
+                        <span className="font-semibold text-emerald-600">
+                          {presentCount > 0 ? `${presentCount} Present` : "—"}
+                        </span>
+                        {presentCount > 0 && (
+                          <span className="text-[9px] text-slate-400 font-mono">{percentage}%</span>
+                        )}
                       </div>
                     </div>
                   );
@@ -1121,13 +1183,12 @@ export function OwnerStaffView() {
                     <td className="py-3 px-4 text-slate-600 italic">&ldquo;{lv.reason}&rdquo;</td>
                     <td className="py-3 px-4">
                       <span
-                        className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${
-                          lv.status === "approved"
+                        className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${lv.status === "approved"
                             ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                             : lv.status === "rejected"
-                            ? "bg-rose-50 text-rose-700 border border-rose-200"
-                            : "bg-amber-50 text-amber-700 border border-amber-200"
-                        }`}
+                              ? "bg-rose-50 text-rose-700 border border-rose-200"
+                              : "bg-amber-50 text-amber-700 border border-amber-200"
+                          }`}
                       >
                         {lv.status.toUpperCase()}
                       </span>
@@ -1205,7 +1266,7 @@ export function OwnerStaffView() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {employees.map((emp) => {
-                    const basic = emp.basicSalary || emp.salaryBase || 35000;
+                    const basic = emp.basicSalary || emp.salaryBase || 3;
                     const hra = emp.hra || basic * 0.4;
                     const allowances = emp.allowances || 3500;
                     const statutory = emp.statutoryDed || basic * 0.12;
@@ -1369,7 +1430,7 @@ export function OwnerStaffView() {
                     type="number"
                     value={empSalary}
                     onChange={(e) => setEmpSalary(e.target.value)}
-                    placeholder="35000"
+                    placeholder="3 "
                     className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl font-mono"
                   />
                 </div>
@@ -1573,7 +1634,7 @@ export function OwnerStaffView() {
                       type="text"
                       value={punchDate}
                       onChange={(e) => setPunchDate(e.target.value)}
-                      placeholder="05/09/2026"
+                      placeholder="DD/MM/YYYY"
                       className="w-full px-3.5 py-2.5 text-xs border border-slate-200 rounded-xl text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 font-mono pr-9"
                     />
                     <Calendar className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -1610,7 +1671,7 @@ export function OwnerStaffView() {
                       type="text"
                       value={punchCheckIn}
                       onChange={(e) => setPunchCheckIn(e.target.value)}
-                      placeholder="09:00 AM"
+                      placeholder="e.g. 09:00 AM"
                       className="w-full px-3.5 py-2.5 text-xs border border-slate-200 rounded-xl text-slate-700 font-mono focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 pr-9"
                     />
                     <Clock className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -1626,7 +1687,7 @@ export function OwnerStaffView() {
                       type="text"
                       value={punchCheckOut}
                       onChange={(e) => setPunchCheckOut(e.target.value)}
-                      placeholder="06:00 PM"
+                      placeholder="e.g. 06:00 PM"
                       className="w-full px-3.5 py-2.5 text-xs border border-slate-200 rounded-xl text-slate-700 font-mono focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 pr-9"
                     />
                     <Clock className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -1644,8 +1705,8 @@ export function OwnerStaffView() {
                   onChange={(e) => setPunchMethod(e.target.value)}
                   className="w-full px-3.5 py-2.5 text-xs text-slate-700 border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 cursor-pointer"
                 >
-                  <option value="Manual Entry (HR Verified)">Manual Entry (HR Verified)</option>
-                  <option value="Biometric Device (Fingerprint)">Biometric Device (Fingerprint)</option>
+                  <option value="Manual Entry">Manual Entry</option>
+                  <option value="Biometric Device">Biometric Device</option>
                   <option value="Face Recognition Scan">Face Recognition Scan</option>
                   <option value="GPS Geo-Fenced Mobile">GPS Geo-Fenced Mobile</option>
                   <option value="WFH Web Portal">WFH Web Portal</option>
@@ -1661,7 +1722,7 @@ export function OwnerStaffView() {
                   type="text"
                   value={punchNotes}
                   onChange={(e) => setPunchNotes(e.target.value)}
-                  placeholder="Direct administrative timesheet record"
+                  placeholder="Optional notes or adjustment reason..."
                   className="w-full px-3.5 py-2.5 text-xs border border-slate-200 rounded-xl text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500"
                 />
               </div>
@@ -1738,7 +1799,7 @@ export function OwnerStaffView() {
                     type="number"
                     value={basicSalaryVal}
                     onChange={(e) => handleBasicSalaryChange(e.target.value)}
-                    placeholder="5000"
+                    placeholder=" "
                     className="w-full px-3 py-2 text-xs border-2 border-sky-400 rounded-xl font-mono font-bold text-slate-900 focus:outline-sky-500"
                   />
                 </div>

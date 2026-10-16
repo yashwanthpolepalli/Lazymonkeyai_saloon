@@ -31,7 +31,7 @@ export function FinanceModule() {
 
   const [isNewExpenseModalOpen, setIsNewExpenseModalOpen] = useState(false);
   const [expenseCategory, setExpenseCategory] = useState<FinancialExpense["category"]>("Salon Maintenance");
-  const [expenseAmount, setExpenseAmount] = useState<number>(15000);
+  const [expenseAmount, setExpenseAmount] = useState<number>(1);
   const [expensePaidTo, setExpensePaidTo] = useState("");
 
   const totalRevenue = branchAppointments

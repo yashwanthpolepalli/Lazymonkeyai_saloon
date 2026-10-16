@@ -421,11 +421,17 @@ export function CustomerBookingView() {
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <img
-                        src={st.avatar}
-                        alt={st.name}
-                        className="w-11 h-11 rounded-full object-cover border border-slate-200 shrink-0"
-                      />
+                      {st.avatar && !st.avatar.includes("unsplash.com") ? (
+                        <img
+                          src={st.avatar}
+                          alt={st.name}
+                          className="w-11 h-11 rounded-full object-cover border border-slate-200 shrink-0"
+                        />
+                      ) : (
+                        <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-amber-500 to-rose-500 text-white font-bold text-xs flex items-center justify-center border border-slate-200 shrink-0">
+                          {(st.name || "ST").slice(0, 2).toUpperCase()}
+                        </div>
+                      )}
                       <div className="text-left overflow-hidden">
                         <div className="font-bold text-xs text-slate-900 truncate">{st.name}</div>
                         <div className="text-[10px] uppercase font-semibold text-amber-700">{st.tier}</div>

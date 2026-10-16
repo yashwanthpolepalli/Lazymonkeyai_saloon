@@ -51,7 +51,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { AppointmentStatus, GenderType, TimeSlotConfig } from "@/types";
-import { generateId } from "@/lib/utils";
+import { generateId, normalizeSlotTime, sortTimeSlots } from "@/lib/utils";
 import { API_BASE_URL } from "@/services/apiClient";
 
 interface CustomScheduleRule {
@@ -261,9 +261,42 @@ export function OwnerDashboardView() {
     setTargetApt(null);
   };
 
-  const handleAddSlot = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newSlotTime.trim()) return;
+  const handleAddSlot = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const trimmed = newSlotTime.trim();
+    if (!trimmed) {
+      addToast(
+        "warning",
+        "Time Required",
+        "Please enter a time for the slot (e.g. 08:00 AM or 09:30 PM)."
+      );
+      return;
+    }
+
+    const normalized = normalizeSlotTime(trimmed);
+    if (!normalized) {
+      addToast(
+        "warning",
+        "Invalid Time Format",
+        "Please enter a valid time like '08:00 AM', '08:30', or '09:00 PM'."
+      );
+      return;
+    }
+
+    // Check if slot already exists
+    const alreadyExists = timeSlots.some(
+      (s) => s.time.toLowerCase() === normalized.toLowerCase()
+    );
+    if (alreadyExists) {
+      addToast(
+        "info",
+        "Slot Already Configured",
+        `Time slot ${normalized} already exists in the schedule.`
+      );
+      setNewSlotTime("");
+      return;
+    }
+
     const allowedGenders: GenderType[] =
       newSlotGender === "all"
         ? ["women", "men", "kids", "unisex"]
@@ -282,8 +315,8 @@ export function OwnerDashboardView() {
         : "regular";
 
     addCustomSlot(
-      newSlotTime.trim(),
-      selectedBranch.id,
+      normalized,
+      selectedBranch?.id || "all",
       "all",
       allowedGenders,
       allowedCategories,
@@ -442,12 +475,15 @@ export function OwnerDashboardView() {
   };
 
   const filteredModalSlots = useMemo(() => {
-    if (slotFilterAudience === "all") return timeSlots;
-    return timeSlots.filter(
-      (s) =>
-        s.slotType === slotFilterAudience ||
-        s.allowedGenders?.includes(slotFilterAudience as any)
-    );
+    const list =
+      slotFilterAudience === "all"
+        ? timeSlots
+        : timeSlots.filter(
+            (s) =>
+              s.slotType === slotFilterAudience ||
+              s.allowedGenders?.includes(slotFilterAudience as any)
+          );
+    return sortTimeSlots(list);
   }, [timeSlots, slotFilterAudience]);
 
   return (
@@ -499,8 +535,15 @@ export function OwnerDashboardView() {
 
           <button
             onClick={() => {
+              if (typeof window !== "undefined") {
+                const url = new URL(window.location.href);
+                url.searchParams.delete("customerId");
+                url.searchParams.delete("customer_id");
+                url.searchParams.set("tab", "pos");
+                window.history.replaceState(null, "", url.toString());
+              }
               setActiveModule("pos");
-              setActiveSubTab("newsale");
+              setActiveSubTab("pos");
             }}
             className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs"
           >
@@ -669,11 +712,17 @@ export function OwnerDashboardView() {
             {stylistStats.slice(0, 4).map((st) => (
               <div key={st.id} className="pt-3 flex items-center justify-between text-xs">
                 <div className="flex items-center gap-3">
-                  <img
-                    src={st.avatar}
-                    alt={st.name}
-                    className="w-10 h-10 rounded-full object-cover border border-slate-200"
-                  />
+                  {st.avatar && !st.avatar.includes("unsplash.com") ? (
+                    <img
+                      src={st.avatar}
+                      alt={st.name}
+                      className="w-10 h-10 rounded-full object-cover border border-slate-200"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-sky-500 to-indigo-500 text-white font-bold text-xs flex items-center justify-center border border-slate-200 shrink-0">
+                      {(st.name || "ST").slice(0, 2).toUpperCase()}
+                    </div>
+                  )}
                   <div>
                     <div className="font-bold text-slate-900">{st.name}</div>
                     <div className="text-[11px] text-slate-400 capitalize">{st.tier} Stylist</div>
@@ -910,7 +959,7 @@ export function OwnerDashboardView() {
                     onChange={(e) => setBatchFromTime(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white font-mono focus:outline-none focus:ring-2 focus:ring-amber-400"
                   >
-                    {timeSlots.map((s) => (
+                    {sortTimeSlots(timeSlots).map((s) => (
                       <option key={s.id} value={s.time}>
                         {s.time}
                       </option>
@@ -925,7 +974,7 @@ export function OwnerDashboardView() {
                     onChange={(e) => setBatchToTime(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white font-mono focus:outline-none focus:ring-2 focus:ring-amber-400"
                   >
-                    {timeSlots.map((s) => (
+                    {sortTimeSlots(timeSlots).map((s) => (
                       <option key={s.id} value={s.time}>
                         {s.time}
                       </option>
@@ -1096,6 +1145,27 @@ export function OwnerDashboardView() {
                   <span>Select All ({timeSlots.length})</span>
                 </button>
 
+                <button
+                  type="button"
+                  onClick={() => {
+                    timeSlots.forEach((slot) => {
+                      updateSlotConfig(slot.id, {
+                        allowedGenders: ["women", "men", "kids", "unisex"],
+                        allowedCategories: ["all"],
+                        slotType: "regular",
+                        isAvailable: true,
+                        blockedReason: undefined,
+                      });
+                    });
+                    setSelectedSlotIds([]);
+                    addToast("success", "All Slots Unblocked", "All slots are unblocked and available.");
+                  }}
+                  className="px-3 py-1.5 rounded-xl border border-emerald-300 bg-emerald-50 text-emerald-800 text-xs font-semibold flex items-center gap-1.5 hover:bg-emerald-100 cursor-pointer shadow-2xs"
+                >
+                  <Unlock className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Unblock All Slots</span>
+                </button>
+
                 {selectedSlotIds.length > 0 && (
                   <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 px-3 py-1 rounded-xl text-xs">
                     <span className="font-bold text-amber-800">{selectedSlotIds.length} Selected:</span>
@@ -1139,20 +1209,21 @@ export function OwnerDashboardView() {
               </div>
 
               {/* Add Custom Slot Input */}
-              <form onSubmit={handleAddSlot} className="flex items-center gap-2">
+              <form onSubmit={handleAddSlot} className="flex flex-wrap sm:flex-nowrap items-center gap-2">
                 <input
                   type="text"
                   value={newSlotTime}
                   onChange={(e) => setNewSlotTime(e.target.value)}
-                  placeholder="Add custom slot e.g. 08:00 AM..."
-                  className="px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+                  placeholder="Add custom slot e.g. 08:00 AM"
+                  className="w-56 px-3.5 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500/30 shadow-2xs"
                 />
                 <button
-                  type="submit"
-                  className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs flex items-center gap-1 cursor-pointer shadow-xs shrink-0"
+                  type="button"
+                  onClick={() => handleAddSlot()}
+                  className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-95 text-white font-semibold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs shrink-0 transition-all"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Add</span>
+                  <span>Add Slot</span>
                 </button>
               </form>
             </div>
@@ -1219,7 +1290,7 @@ export function OwnerDashboardView() {
                             toggleSlotAvailability(
                               slot.id,
                               !isAvail,
-                              !isAvail ? undefined : "Salon Maintenance & Break"
+                              !isAvail ? undefined : "Blocked by salon management"
                             )
                           }
                           className={`px-2.5 py-1 rounded-lg text-xs font-bold cursor-pointer transition-all ${

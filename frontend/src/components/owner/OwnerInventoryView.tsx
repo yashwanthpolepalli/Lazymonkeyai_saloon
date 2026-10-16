@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useSalon } from "@/context/SalonContext";
 import {
   Box,
@@ -24,7 +24,27 @@ import { downloadCsvFile, SAMPLE_INVENTORY_CSV } from "@/lib/csvHelper";
 
 export function OwnerInventoryView() {
   const { inventory, selectedBranch, addToast } = useSalon();
-  const [activeTab, setActiveTab] = useState<"retail" | "backbar">("retail");
+  const [activeTab, setActiveTab] = useState<"retail" | "backbar">(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const sub = params.get("subtab");
+      if (sub === "retail" || sub === "backbar") return sub;
+      const saved = localStorage.getItem("salon_inventory_tab");
+      if (saved === "retail" || saved === "backbar") return saved as any;
+    }
+    return "retail";
+  });
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("salon_inventory_tab", activeTab);
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("subtab") !== activeTab) {
+        url.searchParams.set("subtab", activeTab);
+        window.history.replaceState(null, "", url.toString());
+      }
+    }
+  }, [activeTab]);
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [isAddProductOpen, setIsAddProductOpen] = useState(false);

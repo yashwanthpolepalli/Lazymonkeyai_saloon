@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useSalon } from "@/context/SalonContext";
 import { formatCurrency } from "@/lib/utils";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/Card";
@@ -37,11 +37,31 @@ export function CustomerPortal() {
     addToast,
   } = useSalon();
 
-  const [activeTab, setActiveTab] = useState<string>("dashboard");
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const sub = params.get("subtab");
+      if (sub) return sub;
+      const saved = localStorage.getItem("salon_customer_portal_tab");
+      if (saved) return saved;
+    }
+    return "dashboard";
+  });
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("salon_customer_portal_tab", activeTab);
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("subtab") !== activeTab) {
+        url.searchParams.set("subtab", activeTab);
+        window.history.replaceState(null, "", url.toString());
+      }
+    }
+  }, [activeTab]);
 
   // Wallet top-up modal state
   const [isTopUpModalOpen, setIsTopUpModalOpen] = useState(false);
-  const [topUpAmount, setTopUpAmount] = useState<number>(5000);
+  const [topUpAmount, setTopUpAmount] = useState<number>();
 
   // New ticket modal
   const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
@@ -99,12 +119,17 @@ export function CustomerPortal() {
       {/* Customer Header Bar */}
       <div className="p-6 rounded-2xl bg-stone-900 text-stone-100 border border-stone-800 flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-xl relative overflow-hidden">
         <div className="flex items-center gap-4">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={currentCustomer.avatar}
-            alt={currentCustomer.name}
-            className="w-20 h-20 rounded-2xl object-cover border-2 border-amber-500/50 shadow-md"
-          />
+          {currentCustomer.avatar && !currentCustomer.avatar.includes("unsplash.com") ? (
+            <img
+              src={currentCustomer.avatar}
+              alt={currentCustomer.name}
+              className="w-20 h-20 rounded-2xl object-cover border-2 border-amber-500/50 shadow-md"
+            />
+          ) : (
+            <div className="w-20 h-20 rounded-2xl bg-amber-500/10 border-2 border-amber-500/50 flex items-center justify-center text-amber-400 font-bold text-2xl shadow-md">
+              {(currentCustomer.name || "C").charAt(0).toUpperCase()}
+            </div>
+          )}
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-semibold text-stone-100">
@@ -344,8 +369,8 @@ export function CustomerPortal() {
                         apt.status === "completed"
                           ? "success"
                           : apt.status === "in_service"
-                          ? "gold"
-                          : "warning"
+                            ? "gold"
+                            : "warning"
                       }
                       size="sm"
                     >
@@ -563,13 +588,12 @@ export function CustomerPortal() {
       >
         <div className="space-y-4">
           <div className="grid grid-cols-3 gap-2">
-            {[2000, 5000, 10000].map((amt) => (
+            {[2000, , 10000].map((amt) => (
               <button
                 key={amt}
                 onClick={() => setTopUpAmount(amt)}
-                className={`p-3 rounded-xl border text-center font-mono font-bold text-xs ${
-                  topUpAmount === amt ? "border-amber-600 bg-amber-50 text-amber-900" : "border-stone-200"
-                }`}
+                className={`p-3 rounded-xl border text-center font-mono font-bold text-xs ${topUpAmount === amt ? "border-amber-600 bg-amber-50 text-amber-900" : "border-stone-200"
+                  }`}
               >
                 {formatCurrency(amt, selectedBranch.currency)}
               </button>

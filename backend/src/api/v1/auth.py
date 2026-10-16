@@ -65,7 +65,8 @@ def register(req: UserRegisterRequest, db: Session = Depends(get_db)):
             "business_type": org.business_type if org else "general",
             "policy_config": org.policy_config if org else {},
             "branch_id": new_user.branch_id,
-            "department": new_user.department
+            "department": new_user.department,
+            "avatar": new_user.avatar
         }
     }
 
@@ -122,7 +123,8 @@ def login(req: UserLoginRequest, db: Session = Depends(get_db)):
             "business_type": org.business_type if org else "general",
             "policy_config": org.policy_config if org else {},
             "branch_id": user.branch_id,
-            "department": user.department
+            "department": user.department,
+            "avatar": user.avatar
         }
     }
 

@@ -776,12 +776,17 @@ export function DynamicBookingWizard({ onComplete }: { onComplete?: () => void }
                         )}
                       >
                         <div className="flex items-center gap-3.5">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={stylist.avatar}
-                            alt={stylist.name}
-                            className="w-16 h-16 rounded-full object-cover border-2 border-amber-400/40 shrink-0"
-                          />
+                          {stylist.avatar && !stylist.avatar.includes("unsplash.com") ? (
+                            <img
+                              src={stylist.avatar}
+                              alt={stylist.name}
+                              className="w-16 h-16 rounded-full object-cover border-2 border-amber-400/40 shrink-0"
+                            />
+                          ) : (
+                            <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-amber-500 to-rose-500 text-white font-bold text-lg flex items-center justify-center border-2 border-amber-400/40 shrink-0">
+                              {(stylist.name || "ST").slice(0, 2).toUpperCase()}
+                            </div>
+                          )}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between">
                               <h4 className="text-sm font-semibold text-stone-900 truncate">

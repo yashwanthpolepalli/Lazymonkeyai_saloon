@@ -23,7 +23,7 @@ router = APIRouter(prefix="/plans", tags=["Subscription & SaaS Plans"])
 #         "currency": "INR",
 #         "branches_limit": 1,
 #         "staff_limit": 5,
-#         "ai_credits_limit": 5000,
+#         "ai_credits_limit":  ,
 #         "features": [
 #             "1 Branch License",
 #             "5 Staff Accounts",
@@ -63,7 +63,7 @@ router = APIRouter(prefix="/plans", tags=["Subscription & SaaS Plans"])
 #         "currency": "INR",
 #         "branches_limit": 5,
 #         "staff_limit": 50,
-#         "ai_credits_limit": 50000,
+#         "ai_credits_limit":  0,
 #         "features": [
 #             "5 Branches License",
 #             "50 Staff Accounts",

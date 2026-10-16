@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useSalon } from "@/context/SalonContext";
 import {
   Users,
@@ -34,7 +34,27 @@ export function OwnerCustomersView() {
   const { customers, setCustomers, addCustomer, addToast, setActiveModule, setActiveSubTab, setCurrentCustomer, selectedBranch } =
     useSalon();
 
-  const [activeTab, setActiveTab] = useState<"directory" | "formulas" | "vouchers">("directory");
+  const [activeTab, setActiveTab] = useState<"directory" | "formulas" | "vouchers">(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const sub = params.get("subtab");
+      if (sub === "directory" || sub === "formulas" || sub === "vouchers") return sub;
+      const saved = localStorage.getItem("salon_customers_tab");
+      if (saved === "directory" || saved === "formulas" || saved === "vouchers") return saved as any;
+    }
+    return "directory";
+  });
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("salon_customers_tab", activeTab);
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("subtab") !== activeTab) {
+        url.searchParams.set("subtab", activeTab);
+        window.history.replaceState(null, "", url.toString());
+      }
+    }
+  }, [activeTab]);
   const [searchQuery, setSearchQuery] = useState("");
   const [genderFilter, setGenderFilter] = useState("all");
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -198,10 +218,10 @@ export function OwnerCustomersView() {
     addCustomer({
       name: name.trim(),
       phone: phone.trim(),
-      email: email.trim() || `${name.toLowerCase().replace(/\s+/g, "")}@example.com`,
+      email: email.trim() || undefined,
       gender: gender as any,
       avatar: "",
-      membershipTier: membershipTier === "none" ? "Rose Silver" : (membershipTier as any),
+      membershipTier: membershipTier === "none" ? "Standard" : (membershipTier as any),
       notes: notes.trim(),
     });
     addToast("success", "Customer Created!", `${name} (${phone}) registered successfully.`);
@@ -447,7 +467,7 @@ export function OwnerCustomersView() {
                       </td>
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-3">
-                          {c.avatar ? (
+                          {c.avatar && !c.avatar.includes("unsplash.com") ? (
                             <img
                               src={c.avatar}
                               alt={c.name}
@@ -495,15 +515,15 @@ export function OwnerCustomersView() {
                       </td>
 
                       <td className="py-3.5 px-4 font-semibold text-slate-700">
-                        {c.totalVisits || 1} visits
+                        {c.totalVisits ?? c.visitsCount ?? 0} visits
                       </td>
 
                       <td className="py-3.5 px-4 font-bold font-mono text-slate-900">
-                        ₹{(c.totalSpend || 4500).toLocaleString()}
+                        ₹{(c.totalSpend ?? c.totalSpent ?? 0).toLocaleString()}
                       </td>
 
                       <td className="py-3.5 px-4 font-bold font-mono text-emerald-700">
-                        ₹{(c.walletBalance || 1000).toLocaleString()}
+                        ₹{(c.walletBalance ?? 0).toLocaleString()}
                       </td>
 
                       <td className="py-3.5 px-4 text-right space-x-2">
@@ -512,7 +532,14 @@ export function OwnerCustomersView() {
                           onClick={() => {
                             setCurrentCustomer(c);
                             setActiveModule("pos");
-                            setActiveSubTab("newsale");
+                            setActiveSubTab("pos");
+                            if (typeof window !== "undefined") {
+                              const url = new URL(window.location.href);
+                              url.searchParams.set("tab", "pos");
+                              url.searchParams.set("customerId", c.id);
+                              window.history.pushState(null, "", url.toString());
+                            }
+                            addToast("info", "Opening POS Billing", `Starting new bill for ${c.name}.`);
                           }}
                           className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-[11px] cursor-pointer inline-flex items-center gap-1 shadow-xs"
                         >
@@ -612,9 +639,19 @@ export function OwnerCustomersView() {
                   <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
                     <button
                       onClick={() => {
+                        const matchedCust = customers.find(
+                          (c) => c.name?.toLowerCase() === formula.customer_name?.toLowerCase() || c.id === formula.customer_id
+                        );
+                        if (matchedCust) setCurrentCustomer(matchedCust);
                         addToast("info", "Formula Loaded", `Loaded color formula for ${formula.customer_name}.`);
                         setActiveModule("pos");
-                        setActiveSubTab("newsale");
+                        setActiveSubTab("pos");
+                        if (typeof window !== "undefined") {
+                          const url = new URL(window.location.href);
+                          url.searchParams.set("tab", "pos");
+                          if (matchedCust) url.searchParams.set("customerId", matchedCust.id);
+                          window.history.pushState(null, "", url.toString());
+                        }
                       }}
                       className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold cursor-pointer flex items-center gap-1.5"
                     >
@@ -709,8 +746,17 @@ export function OwnerCustomersView() {
                   </button>
                   <button
                     onClick={() => {
+                      const matchedCust = customers.find((c) => c.id === voucher.customer_id);
+                      if (matchedCust) setCurrentCustomer(matchedCust);
+                      addToast("info", "Opening POS", `Redeeming voucher ${voucher.code} at register.`);
                       setActiveModule("pos");
-                      setActiveSubTab("newsale");
+                      setActiveSubTab("pos");
+                      if (typeof window !== "undefined") {
+                        const url = new URL(window.location.href);
+                        url.searchParams.set("tab", "pos");
+                        if (matchedCust) url.searchParams.set("customerId", matchedCust.id);
+                        window.history.pushState(null, "", url.toString());
+                      }
                     }}
                     className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs cursor-pointer shadow-xs"
                   >

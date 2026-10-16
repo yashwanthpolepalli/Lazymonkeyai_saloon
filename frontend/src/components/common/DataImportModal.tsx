@@ -384,31 +384,31 @@ export function DataImportModal({
               row["Full Name"] ||
               row["Name"] ||
               row["customer_name"] ||
-              `Client ${idx + 1}`;
+              "";
             const phone =
               row["Phone Number"] ||
               row["Phone"] ||
               row["phone"] ||
-              `+91 98000 ${Math.floor(10000 + Math.random() * 90000)}`;
+              "";
             const email =
               row["Email Address"] ||
               row["Email"] ||
               row["email"] ||
-              `client${idx + 1}@example.com`;
+              "";
             const gender = (
-              row["Gender"] || row["gender"] || "female"
+              row["Gender"] || row["gender"] || ""
             ).toLowerCase() === "male"
               ? "male"
               : "female";
             const membershipTier =
-              row["Membership Tier"] || row["Tier"] || "Rose Silver";
+              row["Membership Tier"] || row["Tier"] || "";
             const walletBalance =
               parseFloat(
                 row["Wallet Balance (INR)"] || row["Wallet Balance"] || "0"
               ) || 0;
             const loyaltyPoints =
-              parseInt(row["Loyalty Points"] || "100") || 100;
-            const segment = (row["Segment"] as any) || "Regular Loyalist";
+              parseInt(row["Loyalty Points"] || "0") || 0;
+            const segment = (row["Segment"] as any) || "New Customer";
             const notes = row["Notes"] || "";
 
             return {
@@ -425,22 +425,22 @@ export function DataImportModal({
               membershipTier,
               packages: [],
               beautyProfile: {
-                hairType: "Normal",
-                hairTexture: "Silky",
-                scalpCondition: "Normal",
-                skinType: "Hydrated",
+                hairType: "",
+                hairTexture: "",
+                scalpCondition: "",
+                skinType: "",
                 skinConcerns: [],
                 allergies: [],
-                preferredBeverage: "Cappuccino",
-                preferredMusic: "Lounge Jazz",
-                lastConsultationDate: new Date().toISOString().split("T")[0],
+                preferredBeverage: "",
+                preferredMusic: "",
+                lastConsultationDate: "",
               },
-              totalSpent: walletBalance * 2,
-              totalSpend: walletBalance * 2,
-              visitsCount: 2,
-              totalVisits: 2,
+              totalSpent: walletBalance,
+              totalSpend: walletBalance,
+              visitsCount: 0,
+              totalVisits: 0,
               segment,
-              tags: ["Imported", membershipTier],
+              tags: ["Imported", membershipTier].filter(Boolean),
               notes,
             };
           });

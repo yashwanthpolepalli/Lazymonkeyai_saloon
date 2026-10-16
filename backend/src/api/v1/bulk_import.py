@@ -10,7 +10,8 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from src.core.database import get_db
-from src.models.salon import Service, ServiceCategory
+from src.models.salon import Service, ServiceCategory, Branch
+from src.models.organization import Organization
 from src.models.customer import Customer
 from src.models.inventory import InventoryProduct
 
@@ -80,7 +81,7 @@ def _extract_name(row: dict, data_type: str, idx: int = 0) -> str:
     return f"Salon {data_type.capitalize()} #{idx + 1}"
 
 
-def _extract_category(row: dict, default_cat: str = "Hair Couture & Styling") -> str:
+def _extract_category(row: dict, default_cat: str = "General") -> str:
     """Extracts clean category name from text, lists, or tags."""
     candidates = [
         "category", "categories", "category_name", "categories_tags",
@@ -106,8 +107,8 @@ def _extract_category(row: dict, default_cat: str = "Hair Couture & Styling") ->
     return default_cat
 
 
-def _extract_price(row: dict, default_price: float = 1800.0) -> float:
-    """Extracts price with fallback to a realistic salon value."""
+def _extract_price(row: dict, default_price: float = 0.0) -> float:
+    """Extracts price with fallback to default_price."""
     candidates = [
         "base_price", "price", "retail_price", "cost_price", "mrp",
         "rate", "amount", "value", "cost", "unit_price", "sale_price",
@@ -119,7 +120,7 @@ def _extract_price(row: dict, default_price: float = 1800.0) -> float:
             # Strip currency symbols if present e.g. "₹2500" or "$45"
             cleaned = re.sub(r"[^\d.]", "", str(val))
             f = float(cleaned)
-            if f > 0:
+            if f >= 0:
                 return f
         except (ValueError, TypeError):
             pass
@@ -160,17 +161,17 @@ def _extract_image(row: dict) -> str:
                         if size_key in sizes and isinstance(sizes[size_key], dict) and "url" in sizes[size_key]:
                             return sizes[size_key]["url"]
 
-    return "https://images.unsplash.com/photo-1560066984-138dadb4c035?auto=format&fit=crop&w=400&q=80"
+    return None
 
 
-def _extract_duration(row: dict, default_mins: int = 45) -> int:
+def _extract_duration(row: dict, default_mins: Optional[int] = None) -> Optional[int]:
     val = _get_dynamic(row, "duration", "duration_minutes", "time", "mins", "minutes", "length")
     if val is not None and val != "":
         try:
             cleaned = re.sub(r"[^\d.]", "", str(val))
             d = int(float(cleaned))
             if d > 0:
-                return min(max(d, 10), 360)
+                return min(d, 720)
         except Exception:
             pass
     return default_mins
@@ -185,7 +186,7 @@ def _extract_desc(row: dict) -> str:
     clean = _clean_str(val)
     if clean:
         return clean[:1000]
-    return "Luxury salon treatment and bespoke professional consultation."
+    return ""
 
 
 def _ensure_category(db: Session, cat_name: str, org_id: Optional[str], cache: dict) -> str:
@@ -229,13 +230,28 @@ async def bulk_upload_csv_stream(
     rows_inserted = 0
     rows_skipped = 0
 
+    # Validate and resolve branch_id and organization_id against DB
+    valid_branch_id = None
+    if branch_id and isinstance(branch_id, str) and branch_id.strip():
+        b = db.query(Branch).filter(Branch.id == branch_id.strip()).first()
+        if b:
+            valid_branch_id = b.id
+    branch_id = valid_branch_id
+
+    valid_org_id = None
+    if organization_id and isinstance(organization_id, str) and organization_id.strip():
+        o = db.query(Organization).filter(Organization.id == organization_id.strip()).first()
+        if o:
+            valid_org_id = o.id
+    organization_id = valid_org_id
+
     # Seed category cache for services
     category_cache: dict = {}
     if data_type == "services":
         for cat in db.query(ServiceCategory).all():
             category_cache[cat.name.lower()] = cat.id
         if not category_cache:
-            cat_id = _ensure_category(db, "Hair Couture & Styling", organization_id, category_cache)
+            cat_id = _ensure_category(db, "General", organization_id, category_cache)
             db.commit()
 
     # Replace mode — wipe existing rows first
@@ -333,10 +349,17 @@ async def bulk_upload_csv_stream(
             image_url = _extract_image(row)
 
             if data_type == "services":
-                cat_name = _extract_category(row, "Hair Couture & Styling")
+                cat_name = _extract_category(row, "General")
                 cat_id = _ensure_category(db, cat_name, organization_id, category_cache)
-                price = _extract_price(row, 1800.0)
-                duration = _extract_duration(row, 45)
+                price = _extract_price(row, 0.0)
+                member_price_val = _clean_str(_get_dynamic(row, "member_price", "vip_price", "membership_price"))
+                member_price = None
+                if member_price_val:
+                    try:
+                        member_price = float(re.sub(r"[^\d.]", "", member_price_val))
+                    except Exception:
+                        member_price = None
+                duration = _extract_duration(row, None)
                 gender_list = _extract_gender(row, name)
 
                 obj = Service(
@@ -345,11 +368,12 @@ async def bulk_upload_csv_stream(
                     category_id=cat_id,
                     category_name=cat_name[:80],
                     base_price=price,
-                    member_price=round(price * 0.85, 2),
+                    member_price=member_price,
                     duration_minutes=duration,
-                    short_desc=desc[:1000],
-                    full_desc=desc[:2000],
+                    short_desc=desc[:1000] if desc else None,
+                    full_desc=desc[:2000] if desc else None,
                     gender=gender_list,
+                    image=image_url,
                     branch_ids=[branch_id] if branch_id else [],
                     organization_id=organization_id,
                     is_active=True,
@@ -358,10 +382,18 @@ async def bulk_upload_csv_stream(
             elif data_type == "customers":
                 phone = _clean_str(_get_dynamic(row, "phone", "phone_number", "mobile", "contact", "tel"))
                 if not phone:
-                    phone = f"+9198{str(uuid.uuid4().int)[:8]}"
+                    phone = f"CUST-{str(uuid.uuid4())[:8].upper()}"
                 email = _clean_str(_get_dynamic(row, "email", "email_address")) or None
                 gender_list = _extract_gender(row, name)
                 gender = "female" if "women" in gender_list else "male" if "men" in gender_list else "other"
+
+                loyalty_pts = 0
+                raw_pts = _get_dynamic(row, "loyalty_points", "loyalty", "points")
+                if raw_pts is not None and str(raw_pts).strip() != "":
+                    try:
+                        loyalty_pts = int(float(re.sub(r"[^\d.]", "", str(raw_pts))))
+                    except Exception:
+                        loyalty_pts = 0
 
                 obj = Customer(
                     id=str(uuid.uuid4()),
@@ -370,20 +402,43 @@ async def bulk_upload_csv_stream(
                     email=email[:100] if email else None,
                     gender=gender,
                     wallet_balance=_extract_price(row, 0.0),
-                    loyalty_points=100,
-                    membership_tier=str(_get_dynamic(row, "membership_tier", "tier") or "Rose Silver"),
+                    loyalty_points=loyalty_pts,
+                    membership_tier=str(_get_dynamic(row, "membership_tier", "tier") or "Standard"),
                     segment=str(_get_dynamic(row, "segment") or "New Customer"),
-                    notes=desc[:500],
+                    notes=desc[:500] if desc else None,
                     preferred_branch_id=branch_id,
                     is_active=True,
                 )
 
             elif data_type == "inventory":
                 sku = _clean_str(_get_dynamic(row, "sku", "barcode", "code", "_id", "id")) or f"SKU-{str(uuid.uuid4())[:8].upper()}"
-                brand = _clean_str(_get_dynamic(row, "brand", "brands", "vendor", "supplier")) or "Generic Professional"
-                cat_name = _extract_category(row, "Salon Care & Consumables")
-                cost_price = _extract_price(row, 650.0)
-                retail_price = round(cost_price * 1.5, 2)
+                brand = _clean_str(_get_dynamic(row, "brand", "brands", "vendor", "supplier")) or ""
+                cat_name = _extract_category(row, "General")
+                cost_price = _extract_price(row, 0.0)
+                raw_retail = _get_dynamic(row, "retail_price", "mrp", "sale_price", "selling_price", "retail_price_inr")
+                if raw_retail is not None and str(raw_retail).strip() != "":
+                    try:
+                        retail_price = float(re.sub(r"[^\d.]", "", str(raw_retail)))
+                    except Exception:
+                        retail_price = cost_price
+                else:
+                    retail_price = cost_price
+
+                stock_val = 0
+                raw_stock = _get_dynamic(row, "current_stock", "stock", "qty", "quantity")
+                if raw_stock is not None and str(raw_stock).strip() != "":
+                    try:
+                        stock_val = int(float(re.sub(r"[^\d.]", "", str(raw_stock))))
+                    except Exception:
+                        stock_val = 0
+
+                reorder_val = 0
+                raw_reorder = _get_dynamic(row, "reorder_threshold", "min_stock", "alert_qty", "threshold")
+                if raw_reorder is not None and str(raw_reorder).strip() != "":
+                    try:
+                        reorder_val = int(float(re.sub(r"[^\d.]", "", str(raw_reorder))))
+                    except Exception:
+                        reorder_val = 0
 
                 obj = InventoryProduct(
                     id=str(uuid.uuid4()),
@@ -391,12 +446,13 @@ async def bulk_upload_csv_stream(
                     name=name[:150],
                     brand=brand[:80],
                     category=cat_name[:80],
-                    unit=str(_get_dynamic(row, "unit", "quantity") or "units")[:30],
+                    unit=str(_get_dynamic(row, "unit") or "units")[:30],
                     cost_price=cost_price,
                     retail_price=retail_price,
-                    current_stock=int(float(_get_dynamic(row, "current_stock", "stock", "qty") or 50)),
-                    reorder_threshold=10,
-                    supplier=brand[:80],
+                    current_stock=stock_val,
+                    reorder_threshold=reorder_val,
+                    image=image_url,
+                    supplier=brand[:80] if brand else None,
                     is_retail=True,
                     is_active=True,
                 )
@@ -463,14 +519,14 @@ async def bulk_upload_json(
         if not category_cache:
             default_cat = ServiceCategory(
                 id=str(uuid.uuid4()),
-                name="Hair Couture & Styling",
-                slug="hair-couture-styling",
+                name="General",
+                slug="general",
                 organization_id=payload.organization_id,
                 is_active=True
             )
             db.add(default_cat)
             db.commit()
-            category_cache["hair couture & styling"] = default_cat.id
+            category_cache["general"] = default_cat.id
 
     if mode == "replace":
         if data_type == "services":
@@ -492,10 +548,17 @@ async def bulk_upload_json(
             desc = _extract_desc(row)
 
             if data_type == "services":
-                cat_name = _extract_category(row, "Hair Couture & Styling")
+                cat_name = _extract_category(row, "General")
                 cat_id = _ensure_category(db, cat_name, payload.organization_id, category_cache)
-                price = _extract_price(row, 1800.0)
-                duration = _extract_duration(row, 45)
+                price = _extract_price(row, 0.0)
+                member_price_val = _clean_str(_get_dynamic(row, "member_price", "vip_price", "membership_price"))
+                member_price = None
+                if member_price_val:
+                    try:
+                        member_price = float(re.sub(r"[^\d.]", "", member_price_val))
+                    except Exception:
+                        member_price = None
+                duration = _extract_duration(row, None)
                 gender_list = _extract_gender(row, name)
 
                 obj = Service(
@@ -504,21 +567,32 @@ async def bulk_upload_json(
                     category_id=cat_id,
                     category_name=cat_name[:80],
                     base_price=price,
-                    member_price=round(price * 0.85, 2),
+                    member_price=member_price,
                     duration_minutes=duration,
-                    short_desc=desc[:1000],
-                    full_desc=desc[:2000],
+                    short_desc=desc[:1000] if desc else None,
+                    full_desc=desc[:2000] if desc else None,
                     gender=gender_list,
+                    image=_extract_image(row),
                     branch_ids=[payload.branch_id] if payload.branch_id else [],
                     organization_id=payload.organization_id,
                     is_active=True,
                 )
 
             elif data_type == "customers":
-                phone = _clean_str(_get_dynamic(row, "phone", "phone_number", "mobile", "contact", "tel")) or f"+9198{str(uuid.uuid4().int)[:8]}"
+                phone = _clean_str(_get_dynamic(row, "phone", "phone_number", "mobile", "contact", "tel"))
+                if not phone:
+                    phone = f"CUST-{str(uuid.uuid4())[:8].upper()}"
                 email = _clean_str(_get_dynamic(row, "email", "email_address")) or None
                 gender_list = _extract_gender(row, name)
                 gender = "female" if "women" in gender_list else "male" if "men" in gender_list else "other"
+
+                loyalty_pts = 0
+                raw_pts = _get_dynamic(row, "loyalty_points", "loyalty", "points")
+                if raw_pts is not None and str(raw_pts).strip() != "":
+                    try:
+                        loyalty_pts = int(float(re.sub(r"[^\d.]", "", str(raw_pts))))
+                    except Exception:
+                        loyalty_pts = 0
 
                 obj = Customer(
                     id=str(uuid.uuid4()),
@@ -527,20 +601,43 @@ async def bulk_upload_json(
                     email=email[:100] if email else None,
                     gender=gender,
                     wallet_balance=_extract_price(row, 0.0),
-                    loyalty_points=100,
-                    membership_tier=str(_get_dynamic(row, "membership_tier", "tier") or "Rose Silver"),
+                    loyalty_points=loyalty_pts,
+                    membership_tier=str(_get_dynamic(row, "membership_tier", "tier") or "Standard"),
                     segment=str(_get_dynamic(row, "segment") or "New Customer"),
-                    notes=desc[:500],
+                    notes=desc[:500] if desc else None,
                     preferred_branch_id=payload.branch_id,
                     is_active=True,
                 )
 
             elif data_type == "inventory":
                 sku = _clean_str(_get_dynamic(row, "sku", "barcode", "code", "_id", "id")) or f"SKU-{str(uuid.uuid4())[:8].upper()}"
-                brand = _clean_str(_get_dynamic(row, "brand", "brands", "vendor", "supplier")) or "Generic Professional"
-                cat_name = _extract_category(row, "Salon Care & Consumables")
-                cost_price = _extract_price(row, 650.0)
-                retail_price = round(cost_price * 1.5, 2)
+                brand = _clean_str(_get_dynamic(row, "brand", "brands", "vendor", "supplier")) or ""
+                cat_name = _extract_category(row, "General")
+                cost_price = _extract_price(row, 0.0)
+                raw_retail = _get_dynamic(row, "retail_price", "mrp", "sale_price", "selling_price", "retail_price_inr")
+                if raw_retail is not None and str(raw_retail).strip() != "":
+                    try:
+                        retail_price = float(re.sub(r"[^\d.]", "", str(raw_retail)))
+                    except Exception:
+                        retail_price = cost_price
+                else:
+                    retail_price = cost_price
+
+                stock_val = 0
+                raw_stock = _get_dynamic(row, "current_stock", "stock", "qty", "quantity")
+                if raw_stock is not None and str(raw_stock).strip() != "":
+                    try:
+                        stock_val = int(float(re.sub(r"[^\d.]", "", str(raw_stock))))
+                    except Exception:
+                        stock_val = 0
+
+                reorder_val = 0
+                raw_reorder = _get_dynamic(row, "reorder_threshold", "min_stock", "alert_qty", "threshold")
+                if raw_reorder is not None and str(raw_reorder).strip() != "":
+                    try:
+                        reorder_val = int(float(re.sub(r"[^\d.]", "", str(raw_reorder))))
+                    except Exception:
+                        reorder_val = 0
 
                 obj = InventoryProduct(
                     id=str(uuid.uuid4()),
@@ -548,12 +645,13 @@ async def bulk_upload_json(
                     name=name[:150],
                     brand=brand[:80],
                     category=cat_name[:80],
-                    unit=str(_get_dynamic(row, "unit", "quantity") or "units")[:30],
+                    unit=str(_get_dynamic(row, "unit") or "units")[:30],
                     cost_price=cost_price,
                     retail_price=retail_price,
-                    current_stock=int(float(_get_dynamic(row, "current_stock", "stock", "qty") or 50)),
-                    reorder_threshold=10,
-                    supplier=brand[:80],
+                    current_stock=stock_val,
+                    reorder_threshold=reorder_val,
+                    image=_extract_image(row),
+                    supplier=brand[:80] if brand else None,
                     is_retail=True,
                     is_active=True,
                 )

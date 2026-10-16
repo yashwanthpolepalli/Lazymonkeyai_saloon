@@ -1,6 +1,4 @@
-"use client";
-
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useSalon } from "@/context/SalonContext";
 import {
   Settings,
@@ -93,7 +91,38 @@ export function OwnerSettingsView({
   // Settings Sub-tab state
   const [activeTab, setActiveTab] = useState<
     "profile" | "branches" | "customizations" | "mfa" | "discounts" | "governance" | "data-hub" | "integrations"
-  >(initialTab);
+  >(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const sub = params.get("subtab");
+      const validTabs = ["profile", "branches", "customizations", "mfa", "discounts", "governance", "data-hub", "integrations"];
+      if (sub && validTabs.includes(sub)) {
+        return sub as any;
+      }
+      const saved = localStorage.getItem("salon_settings_tab");
+      if (saved && validTabs.includes(saved)) {
+        return saved as any;
+      }
+    }
+    return initialTab;
+  });
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("salon_settings_tab", activeTab);
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("subtab") !== activeTab) {
+        url.searchParams.set("subtab", activeTab);
+        window.history.replaceState(null, "", url.toString());
+      }
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (initialTab && initialTab !== "profile") {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importModalType, setImportModalType] = useState<ImportDataType>("services");
@@ -107,12 +136,12 @@ export function OwnerSettingsView({
   const [icalCopied, setIcalCopied] = useState(false);
 
   // WhatsApp Cloud API Test Sender State
-  const [waPhone, setWaPhone] = useState("+91 98765 43210");
+  const [waPhone, setWaPhone] = useState("");
   const [waTemplate, setWaTemplate] = useState("appointment_confirmation");
-  const [waCustomerName, setWaCustomerName] = useState("Priya Patel");
-  const [waServiceName, setWaServiceName] = useState("HydraFacial Glow Treatment");
-  const [waAmount, setWaAmount] = useState("4500");
-  const [waDate, setWaDate] = useState("Tomorrow at 11:30 AM");
+  const [waCustomerName, setWaCustomerName] = useState("");
+  const [waServiceName, setWaServiceName] = useState("");
+  const [waAmount, setWaAmount] = useState("");
+  const [waDate, setWaDate] = useState("");
   const [waSending, setWaSending] = useState(false);
   const [waResponseLog, setWaResponseLog] = useState<any>(null);
 
@@ -124,9 +153,9 @@ export function OwnerSettingsView({
   const [printerPrintStatus, setPrinterPrintStatus] = useState<string>("");
 
   // Barcode Scanner Listener Monitor
-  const [lastScannedCode, setLastScannedCode] = useState<string>("PROD-SERUM-001");
-  const [scannerBufferSpeed, setScannerBufferSpeed] = useState<string>("18ms (High-Speed HID Wedge)");
-  const [scannerMatchedItem, setScannerMatchedItem] = useState<string>("Moroccanoil Treatment Original (100ml)");
+  const [lastScannedCode, setLastScannedCode] = useState<string>("");
+  const [scannerBufferSpeed, setScannerBufferSpeed] = useState<string>("Ready (Idle)");
+  const [scannerMatchedItem, setScannerMatchedItem] = useState<string>("No barcode scanned yet");
 
   const handleOpenImport = (type: ImportDataType) => {
     setImportModalType(type);
@@ -201,9 +230,9 @@ export function OwnerSettingsView({
   const [branchLogo, setBranchLogo] = useState("");
   const [branchDescription, setBranchDescription] = useState("");
   const [branchCurrency, setBranchCurrency] = useState("INR");
-  const [branchTaxRate, setBranchTaxRate] = useState("18");
-  const [branchChairs, setBranchChairs] = useState("8");
-  const [branchHours, setBranchHours] = useState("09:00 AM - 09:00 PM");
+  const [branchTaxRate, setBranchTaxRate] = useState("");
+  const [branchChairs, setBranchChairs] = useState("");
+  const [branchHours, setBranchHours] = useState("");
 
   const handleBranchImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -258,13 +287,29 @@ export function OwnerSettingsView({
       image: branchImage,
       logo: branchLogo,
       description: branchDescription.trim(),
-      currency: branchCurrency,
-      taxRate: (parseFloat(branchTaxRate) || 18) / 100,
-      chairsCount: parseInt(branchChairs, 10) || 10,
-      openingHours: branchHours,
+      currency: branchCurrency || "INR",
+      taxRate: (parseFloat(branchTaxRate) || 0) / 100,
+      chairsCount: parseInt(branchChairs, 10) || 0,
+      openingHours: branchHours.trim(),
     });
 
     setBranchName("");
+    setBranchCode("");
+    setBranchManager("");
+    setBranchPhone("");
+    setBranchEmail("");
+    setBranchWhatsapp("");
+    setBranchAddress("");
+    setBranchCity("");
+    setBranchState("");
+    setBranchPinCode("");
+    setBranchMapLocation("");
+    setBranchImage("");
+    setBranchLogo("");
+    setBranchDescription("");
+    setBranchTaxRate("");
+    setBranchChairs("");
+    setBranchHours("");
     setIsCreateBranchOpen(false);
   };
 
@@ -367,7 +412,7 @@ export function OwnerSettingsView({
   const [membershipDiscounts, setMembershipDiscounts] = useState(gstSettings.membershipDiscounts);
 
   // Live Simulator State
-  const [simServiceAmount, setSimServiceAmount] = useState<number>(5000);
+  const [simServiceAmount, setSimServiceAmount] = useState<number>();
   const [simDiscountPct, setSimDiscountPct] = useState<number>(10);
 
   const applyGstPreset = (rate: number) => {
@@ -474,11 +519,10 @@ export function OwnerSettingsView({
           {/* Tab 1: Owner Profile */}
           <button
             onClick={() => setActiveTab("profile")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-              activeTab === "profile"
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${activeTab === "profile"
                 ? "bg-sky-500 text-white shadow-md shadow-sky-500/20 font-bold"
                 : "bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200/80"
-            }`}
+              }`}
           >
             <User className="w-3.5 h-3.5" />
             <span>Owner Profile & Avatar</span>
@@ -487,18 +531,16 @@ export function OwnerSettingsView({
           {/* Tab 2: Branch Creations */}
           <button
             onClick={() => setActiveTab("branches")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-              activeTab === "branches"
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${activeTab === "branches"
                 ? "bg-sky-500 text-white shadow-md shadow-sky-500/20 font-bold"
                 : "bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200/80"
-            }`}
+              }`}
           >
             <Building2 className="w-3.5 h-3.5" />
             <span>Branch Creations & Network</span>
             <span
-              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                activeTab === "branches" ? "bg-white/20 text-white" : "bg-sky-100 text-sky-800"
-              }`}
+              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${activeTab === "branches" ? "bg-white/20 text-white" : "bg-sky-100 text-sky-800"
+                }`}
             >
               {branches.length}
             </span>
@@ -507,11 +549,10 @@ export function OwnerSettingsView({
           {/* Tab 3: Customisations */}
           <button
             onClick={() => setActiveTab("customizations")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-              activeTab === "customizations"
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${activeTab === "customizations"
                 ? "bg-sky-500 text-white shadow-md shadow-sky-500/20 font-bold"
                 : "bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200/80"
-            }`}
+              }`}
           >
             <Sliders className="w-3.5 h-3.5" />
             <span>Salon Customisations</span>
@@ -520,18 +561,16 @@ export function OwnerSettingsView({
           {/* Tab 4: MFA & Security */}
           <button
             onClick={() => setActiveTab("mfa")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-              activeTab === "mfa"
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${activeTab === "mfa"
                 ? "bg-sky-500 text-white shadow-md shadow-sky-500/20 font-bold"
                 : "bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200/80"
-            }`}
+              }`}
           >
             <ShieldCheck className="w-3.5 h-3.5" />
             <span>MFA Activations & Page Security</span>
             <span
-              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                activeTab === "mfa" ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-800"
-              }`}
+              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${activeTab === "mfa" ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-800"
+                }`}
             >
               2FA
             </span>
@@ -540,22 +579,20 @@ export function OwnerSettingsView({
           {/* Tab 5: Discounts & GST Taxes */}
           <button
             onClick={() => setActiveTab("discounts")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-              activeTab === "discounts"
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${activeTab === "discounts"
                 ? "bg-sky-500 text-white shadow-md shadow-sky-500/20 font-bold"
                 : "bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200/80"
-            }`}
+              }`}
           >
             <Percent className="w-3.5 h-3.5" />
             <span>Discount & GST Taxes</span>
             <span
-              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                activeTab === "discounts"
+              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${activeTab === "discounts"
                   ? "bg-white/20 text-white"
                   : isGstEnabled
-                  ? "bg-emerald-100 text-emerald-800"
-                  : "bg-slate-200 text-slate-700"
-              }`}
+                    ? "bg-emerald-100 text-emerald-800"
+                    : "bg-slate-200 text-slate-700"
+                }`}
             >
               {isGstEnabled ? `${gstRatePct}% GST` : "Tax Off"}
             </span>
@@ -564,18 +601,16 @@ export function OwnerSettingsView({
           {/* Tab 6: Governance & Institutional Policies */}
           <button
             onClick={() => setActiveTab("governance")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-              activeTab === "governance"
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${activeTab === "governance"
                 ? "bg-sky-500 text-white shadow-md shadow-sky-500/20 font-bold"
                 : "bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200/80"
-            }`}
+              }`}
           >
             <ShieldCheck className="w-3.5 h-3.5 text-indigo-500" />
             <span>Governance & Policies</span>
             <span
-              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                activeTab === "governance" ? "bg-white/20 text-white" : "bg-indigo-100 text-indigo-800"
-              }`}
+              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${activeTab === "governance" ? "bg-white/20 text-white" : "bg-indigo-100 text-indigo-800"
+                }`}
             >
               Policy Engine
             </span>
@@ -584,18 +619,16 @@ export function OwnerSettingsView({
           {/* Tab 7: Data Import & Sample CSV Hub */}
           <button
             onClick={() => setActiveTab("data-hub")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-              activeTab === "data-hub"
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${activeTab === "data-hub"
                 ? "bg-sky-500 text-white shadow-md shadow-sky-500/20 font-bold"
                 : "bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200/80"
-            }`}
+              }`}
           >
             <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-500" />
             <span>Import / Export & Sample CSV</span>
             <span
-              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                activeTab === "data-hub" ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-800"
-              }`}
+              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${activeTab === "data-hub" ? "bg-white/20 text-white" : "bg-emerald-100 text-emerald-800"
+                }`}
             >
               CSV / XLS
             </span>
@@ -604,18 +637,16 @@ export function OwnerSettingsView({
           {/* Tab 7: Hardware & Third-Party Integrations */}
           <button
             onClick={() => setActiveTab("integrations")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-              activeTab === "integrations"
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${activeTab === "integrations"
                 ? "bg-sky-500 text-white shadow-md shadow-sky-500/20 font-bold"
                 : "bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200/80"
-            }`}
+              }`}
           >
             <Cpu className="w-3.5 h-3.5 text-purple-500" />
             <span>Hardware & Integrations</span>
             <span
-              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                activeTab === "integrations" ? "bg-white/20 text-white" : "bg-purple-100 text-purple-800"
-              }`}
+              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${activeTab === "integrations" ? "bg-white/20 text-white" : "bg-purple-100 text-purple-800"
+                }`}
             >
               Live Sync & POS HW
             </span>
@@ -632,7 +663,7 @@ export function OwnerSettingsView({
             {/* Left: Profile Preview Card & Avatar Upload */}
             <div className="bg-white rounded-2xl p-6 border border-slate-200/90 shadow-xs flex flex-col items-center text-center">
               <div className="relative group mb-4">
-                {profAvatar ? (
+                {profAvatar && !profAvatar.includes("unsplash.com") ? (
                   <img
                     src={profAvatar}
                     alt={profName}
@@ -852,9 +883,8 @@ export function OwnerSettingsView({
                 return (
                   <div
                     key={b.id}
-                    className={`bg-white rounded-2xl border transition-all overflow-hidden shadow-xs hover:shadow-md flex flex-col justify-between ${
-                      isSelected ? "border-sky-500 ring-2 ring-sky-300" : "border-slate-200/90"
-                    }`}
+                    className={`bg-white rounded-2xl border transition-all overflow-hidden shadow-xs hover:shadow-md flex flex-col justify-between ${isSelected ? "border-sky-500 ring-2 ring-sky-300" : "border-slate-200/90"
+                      }`}
                   >
                     {/* Top Media Banner */}
                     <div className="relative h-44 overflow-hidden">
@@ -879,13 +909,12 @@ export function OwnerSettingsView({
 
                       {/* Status */}
                       <div className="absolute top-3 right-3">
-                        <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
-                          b.status === "active"
+                        <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${b.status === "active"
                             ? "bg-emerald-500 text-white"
                             : b.status === "opening_soon"
-                            ? "bg-amber-500 text-white"
-                            : "bg-rose-500 text-white"
-                        }`}>
+                              ? "bg-amber-500 text-white"
+                              : "bg-rose-500 text-white"
+                          }`}>
                           {b.status.replace("_", " ")}
                         </span>
                       </div>
@@ -962,11 +991,10 @@ export function OwnerSettingsView({
                             setSelectedBranchId(b.id);
                             addToast("success", "Active Branch Switched", `Now operating ${b.name}`);
                           }}
-                          className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                            isSelected
+                          className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${isSelected
                               ? "bg-sky-500 text-white shadow-xs"
                               : "bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200"
-                          }`}
+                            }`}
                         >
                           {isSelected ? "Active Branch" : "Set As Active"}
                         </button>
@@ -1130,11 +1158,10 @@ export function OwnerSettingsView({
                       key={preset.id}
                       type="button"
                       onClick={() => setCustomAccent(preset.id as any)}
-                      className={`p-2.5 rounded-xl text-xs font-bold flex items-center justify-between border transition-all cursor-pointer ${
-                        customAccent === preset.id
+                      className={`p-2.5 rounded-xl text-xs font-bold flex items-center justify-between border transition-all cursor-pointer ${customAccent === preset.id
                           ? "border-sky-500 ring-2 ring-sky-300 bg-sky-50/50 text-slate-900"
                           : "border-slate-200 bg-slate-50/50 text-slate-600 hover:bg-slate-100"
-                      }`}
+                        }`}
                     >
                       <span>{preset.label}</span>
                       <span className={`w-3.5 h-3.5 rounded-full ${preset.color}`} />
@@ -1151,14 +1178,12 @@ export function OwnerSettingsView({
                 <button
                   type="button"
                   onClick={() => setCustomOnlineBooking(!customOnlineBooking)}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                    customOnlineBooking ? "bg-sky-500" : "bg-slate-200"
-                  }`}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${customOnlineBooking ? "bg-sky-500" : "bg-slate-200"
+                    }`}
                 >
                   <span
-                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                      customOnlineBooking ? "translate-x-5" : "translate-x-0"
-                    }`}
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${customOnlineBooking ? "translate-x-5" : "translate-x-0"
+                      }`}
                   />
                 </button>
               </div>
@@ -1348,14 +1373,12 @@ export function OwnerSettingsView({
                 <button
                   type="button"
                   onClick={() => toggleMfaMaster(!mfaSettings.isMFAEnabled)}
-                  className={`relative inline-flex h-7 w-14 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                    mfaSettings.isMFAEnabled ? "bg-sky-500" : "bg-slate-200"
-                  }`}
+                  className={`relative inline-flex h-7 w-14 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${mfaSettings.isMFAEnabled ? "bg-sky-500" : "bg-slate-200"
+                    }`}
                 >
                   <span
-                    className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                      mfaSettings.isMFAEnabled ? "translate-x-7" : "translate-x-0"
-                    }`}
+                    className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${mfaSettings.isMFAEnabled ? "translate-x-7" : "translate-x-0"
+                      }`}
                   />
                 </button>
               </div>
@@ -1450,14 +1473,12 @@ export function OwnerSettingsView({
                 <button
                   type="button"
                   onClick={() => togglePageMfa("posPayments", !mfaSettings.pageProtection.posPayments)}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                    mfaSettings.pageProtection.posPayments ? "bg-sky-500" : "bg-slate-200"
-                  }`}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${mfaSettings.pageProtection.posPayments ? "bg-sky-500" : "bg-slate-200"
+                    }`}
                 >
                   <span
-                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                      mfaSettings.pageProtection.posPayments ? "translate-x-5" : "translate-x-0"
-                    }`}
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${mfaSettings.pageProtection.posPayments ? "translate-x-5" : "translate-x-0"
+                      }`}
                   />
                 </button>
               </div>
@@ -1479,14 +1500,12 @@ export function OwnerSettingsView({
                 <button
                   type="button"
                   onClick={() => togglePageMfa("payrollStructures", !mfaSettings.pageProtection.payrollStructures)}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                    mfaSettings.pageProtection.payrollStructures ? "bg-sky-500" : "bg-slate-200"
-                  }`}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${mfaSettings.pageProtection.payrollStructures ? "bg-sky-500" : "bg-slate-200"
+                    }`}
                 >
                   <span
-                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                      mfaSettings.pageProtection.payrollStructures ? "translate-x-5" : "translate-x-0"
-                    }`}
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${mfaSettings.pageProtection.payrollStructures ? "translate-x-5" : "translate-x-0"
+                      }`}
                   />
                 </button>
               </div>
@@ -1508,14 +1527,12 @@ export function OwnerSettingsView({
                 <button
                   type="button"
                   onClick={() => togglePageMfa("inventoryCosting", !mfaSettings.pageProtection.inventoryCosting)}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                    mfaSettings.pageProtection.inventoryCosting ? "bg-sky-500" : "bg-slate-200"
-                  }`}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${mfaSettings.pageProtection.inventoryCosting ? "bg-sky-500" : "bg-slate-200"
+                    }`}
                 >
                   <span
-                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                      mfaSettings.pageProtection.inventoryCosting ? "translate-x-5" : "translate-x-0"
-                    }`}
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${mfaSettings.pageProtection.inventoryCosting ? "translate-x-5" : "translate-x-0"
+                      }`}
                   />
                 </button>
               </div>
@@ -1537,14 +1554,12 @@ export function OwnerSettingsView({
                 <button
                   type="button"
                   onClick={() => togglePageMfa("customerExport", !mfaSettings.pageProtection.customerExport)}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                    mfaSettings.pageProtection.customerExport ? "bg-sky-500" : "bg-slate-200"
-                  }`}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${mfaSettings.pageProtection.customerExport ? "bg-sky-500" : "bg-slate-200"
+                    }`}
                 >
                   <span
-                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                      mfaSettings.pageProtection.customerExport ? "translate-x-5" : "translate-x-0"
-                    }`}
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${mfaSettings.pageProtection.customerExport ? "translate-x-5" : "translate-x-0"
+                      }`}
                   />
                 </button>
               </div>
@@ -1566,14 +1581,12 @@ export function OwnerSettingsView({
                 <button
                   type="button"
                   onClick={() => togglePageMfa("branchPlatform", !mfaSettings.pageProtection.branchPlatform)}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                    mfaSettings.pageProtection.branchPlatform ? "bg-sky-500" : "bg-slate-200"
-                  }`}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${mfaSettings.pageProtection.branchPlatform ? "bg-sky-500" : "bg-slate-200"
+                    }`}
                 >
                   <span
-                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                      mfaSettings.pageProtection.branchPlatform ? "translate-x-5" : "translate-x-0"
-                    }`}
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${mfaSettings.pageProtection.branchPlatform ? "translate-x-5" : "translate-x-0"
+                      }`}
                   />
                 </button>
               </div>
@@ -1595,14 +1608,12 @@ export function OwnerSettingsView({
                 <button
                   type="button"
                   onClick={() => togglePageMfa("staffManagement", !mfaSettings.pageProtection.staffManagement)}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                    mfaSettings.pageProtection.staffManagement ? "bg-sky-500" : "bg-slate-200"
-                  }`}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${mfaSettings.pageProtection.staffManagement ? "bg-sky-500" : "bg-slate-200"
+                    }`}
                 >
                   <span
-                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                      mfaSettings.pageProtection.staffManagement ? "translate-x-5" : "translate-x-0"
-                    }`}
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${mfaSettings.pageProtection.staffManagement ? "translate-x-5" : "translate-x-0"
+                      }`}
                   />
                 </button>
               </div>
@@ -1619,24 +1630,21 @@ export function OwnerSettingsView({
           {/* Top Master Toggles Card */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* GST Master Switch */}
-            <div className={`p-5 rounded-2xl border transition-all ${
-              isGstEnabled
+            <div className={`p-5 rounded-2xl border transition-all ${isGstEnabled
                 ? "bg-emerald-50/40 border-emerald-200/90 shadow-xs"
                 : "bg-slate-50 border-slate-200/80"
-            }`}>
+              }`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className={`p-2.5 rounded-xl ${
-                    isGstEnabled ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/20" : "bg-slate-200 text-slate-500"
-                  }`}>
+                  <div className={`p-2.5 rounded-xl ${isGstEnabled ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/20" : "bg-slate-200 text-slate-500"
+                    }`}>
                     <Receipt className="w-5 h-5" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
                       <h3 className="font-bold text-sm text-slate-900">GST / Tax Billing Engine</h3>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        isGstEnabled ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-600"
-                      }`}>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isGstEnabled ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-600"
+                        }`}>
                         {isGstEnabled ? "ENABLED (ACTIVE)" : "DISABLED (OFF)"}
                       </span>
                     </div>
@@ -1659,38 +1667,33 @@ export function OwnerSettingsView({
                       nextState ? "GST tax engine will apply to all new POS bills." : "Invoices will now be tax-free."
                     );
                   }}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                    isGstEnabled ? "bg-emerald-600" : "bg-slate-300"
-                  }`}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${isGstEnabled ? "bg-emerald-600" : "bg-slate-300"
+                    }`}
                 >
                   <span
-                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                      isGstEnabled ? "translate-x-5" : "translate-x-0"
-                    }`}
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${isGstEnabled ? "translate-x-5" : "translate-x-0"
+                      }`}
                   />
                 </button>
               </div>
             </div>
 
             {/* Discount Master Switch */}
-            <div className={`p-5 rounded-2xl border transition-all ${
-              isDiscountEnabled
+            <div className={`p-5 rounded-2xl border transition-all ${isDiscountEnabled
                 ? "bg-sky-50/40 border-sky-200/90 shadow-xs"
                 : "bg-slate-50 border-slate-200/80"
-            }`}>
+              }`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className={`p-2.5 rounded-xl ${
-                    isDiscountEnabled ? "bg-sky-600 text-white shadow-md shadow-sky-600/20" : "bg-slate-200 text-slate-500"
-                  }`}>
+                  <div className={`p-2.5 rounded-xl ${isDiscountEnabled ? "bg-sky-600 text-white shadow-md shadow-sky-600/20" : "bg-slate-200 text-slate-500"
+                    }`}>
                     <Percent className="w-5 h-5" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
                       <h3 className="font-bold text-sm text-slate-900">Discount Matrix Engine</h3>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        isDiscountEnabled ? "bg-sky-100 text-sky-800" : "bg-slate-200 text-slate-600"
-                      }`}>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isDiscountEnabled ? "bg-sky-100 text-sky-800" : "bg-slate-200 text-slate-600"
+                        }`}>
                         {isDiscountEnabled ? "ENABLED (ACTIVE)" : "DISABLED (OFF)"}
                       </span>
                     </div>
@@ -1713,14 +1716,12 @@ export function OwnerSettingsView({
                       nextState ? "Stylists and cashiers can apply configured discounts." : "Discounts locked across all terminals."
                     );
                   }}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                    isDiscountEnabled ? "bg-sky-600" : "bg-slate-300"
-                  }`}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${isDiscountEnabled ? "bg-sky-600" : "bg-slate-300"
+                    }`}
                 >
                   <span
-                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-                      isDiscountEnabled ? "translate-x-5" : "translate-x-0"
-                    }`}
+                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${isDiscountEnabled ? "translate-x-5" : "translate-x-0"
+                      }`}
                   />
                 </button>
               </div>
@@ -1764,11 +1765,10 @@ export function OwnerSettingsView({
                         key={slab.rate}
                         type="button"
                         onClick={() => applyGstPreset(slab.rate)}
-                        className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
-                          gstRatePct === slab.rate
+                        className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${gstRatePct === slab.rate
                             ? "bg-emerald-600 text-white border-emerald-600 shadow-xs font-bold"
                             : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 text-xs font-medium"
-                        }`}
+                          }`}
                       >
                         <div className="text-xs font-bold">{slab.rate}%</div>
                         <div className={`text-[10px] truncate ${gstRatePct === slab.rate ? "text-emerald-100" : "text-slate-500"}`}>
@@ -1782,15 +1782,13 @@ export function OwnerSettingsView({
                 {/* Percentage Breakdown Fields with Dynamic On/Off Toggles */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 pt-2">
                   {/* SGST % */}
-                  <div className={`p-3.5 rounded-xl border transition-all ${
-                    isSgstEnabled ? "border-slate-200 bg-slate-50/50" : "border-slate-200/60 bg-slate-100/40 opacity-75"
-                  }`}>
+                  <div className={`p-3.5 rounded-xl border transition-all ${isSgstEnabled ? "border-slate-200 bg-slate-50/50" : "border-slate-200/60 bg-slate-100/40 opacity-75"
+                    }`}>
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="flex items-center gap-1.5">
                         <label className="text-xs font-bold text-slate-800">SGST (%)</label>
-                        <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-md ${
-                          isSgstEnabled ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-500"
-                        }`}>
+                        <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-md ${isSgstEnabled ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-500"
+                          }`}>
                           {isSgstEnabled ? "ON" : "OFF"}
                         </span>
                       </div>
@@ -1801,15 +1799,13 @@ export function OwnerSettingsView({
                           setIsSgstEnabled(next);
                           addToast("info", next ? "SGST Enabled" : "SGST Disabled", next ? "SGST will be added to bills." : "SGST excluded from bills.");
                         }}
-                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                          isSgstEnabled ? "bg-emerald-600" : "bg-slate-300"
-                        }`}
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${isSgstEnabled ? "bg-emerald-600" : "bg-slate-300"
+                          }`}
                         title={isSgstEnabled ? "Turn off SGST" : "Turn on SGST"}
                       >
                         <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
-                            isSgstEnabled ? "translate-x-4" : "translate-x-0"
-                          }`}
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${isSgstEnabled ? "translate-x-4" : "translate-x-0"
+                            }`}
                         />
                       </button>
                     </div>
@@ -1822,26 +1818,23 @@ export function OwnerSettingsView({
                         disabled={!isSgstEnabled}
                         value={sgstRatePct}
                         onChange={(e) => handleSgstChange(parseFloat(e.target.value) || 0)}
-                        className={`w-full pl-3 pr-7 py-2 rounded-lg border font-mono font-bold text-xs focus:outline-hidden ${
-                          isSgstEnabled
+                        className={`w-full pl-3 pr-7 py-2 rounded-lg border font-mono font-bold text-xs focus:outline-hidden ${isSgstEnabled
                             ? "border-slate-200 bg-white text-slate-900 focus:border-emerald-500"
                             : "border-slate-200 bg-slate-100/70 text-slate-400 cursor-not-allowed"
-                        }`}
+                          }`}
                       />
                       <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-bold">%</span>
                     </div>
                   </div>
 
                   {/* CGST % */}
-                  <div className={`p-3.5 rounded-xl border transition-all ${
-                    isCgstEnabled ? "border-slate-200 bg-slate-50/50" : "border-slate-200/60 bg-slate-100/40 opacity-75"
-                  }`}>
+                  <div className={`p-3.5 rounded-xl border transition-all ${isCgstEnabled ? "border-slate-200 bg-slate-50/50" : "border-slate-200/60 bg-slate-100/40 opacity-75"
+                    }`}>
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="flex items-center gap-1.5">
                         <label className="text-xs font-bold text-slate-800">CGST (%)</label>
-                        <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-md ${
-                          isCgstEnabled ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-500"
-                        }`}>
+                        <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-md ${isCgstEnabled ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-500"
+                          }`}>
                           {isCgstEnabled ? "ON" : "OFF"}
                         </span>
                       </div>
@@ -1852,15 +1845,13 @@ export function OwnerSettingsView({
                           setIsCgstEnabled(next);
                           addToast("info", next ? "CGST Enabled" : "CGST Disabled", next ? "CGST will be added to bills." : "CGST excluded from bills.");
                         }}
-                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                          isCgstEnabled ? "bg-emerald-600" : "bg-slate-300"
-                        }`}
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${isCgstEnabled ? "bg-emerald-600" : "bg-slate-300"
+                          }`}
                         title={isCgstEnabled ? "Turn off CGST" : "Turn on CGST"}
                       >
                         <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
-                            isCgstEnabled ? "translate-x-4" : "translate-x-0"
-                          }`}
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${isCgstEnabled ? "translate-x-4" : "translate-x-0"
+                            }`}
                         />
                       </button>
                     </div>
@@ -1873,26 +1864,23 @@ export function OwnerSettingsView({
                         disabled={!isCgstEnabled}
                         value={cgstRatePct}
                         onChange={(e) => handleCgstChange(parseFloat(e.target.value) || 0)}
-                        className={`w-full pl-3 pr-7 py-2 rounded-lg border font-mono font-bold text-xs focus:outline-hidden ${
-                          isCgstEnabled
+                        className={`w-full pl-3 pr-7 py-2 rounded-lg border font-mono font-bold text-xs focus:outline-hidden ${isCgstEnabled
                             ? "border-slate-200 bg-white text-slate-900 focus:border-emerald-500"
                             : "border-slate-200 bg-slate-100/70 text-slate-400 cursor-not-allowed"
-                        }`}
+                          }`}
                       />
                       <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-bold">%</span>
                     </div>
                   </div>
 
                   {/* IGST % */}
-                  <div className={`p-3.5 rounded-xl border transition-all ${
-                    isIgstEnabled ? "border-slate-200 bg-slate-50/50" : "border-slate-200/60 bg-slate-100/40 opacity-75"
-                  }`}>
+                  <div className={`p-3.5 rounded-xl border transition-all ${isIgstEnabled ? "border-slate-200 bg-slate-50/50" : "border-slate-200/60 bg-slate-100/40 opacity-75"
+                    }`}>
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="flex items-center gap-1.5">
                         <label className="text-xs font-bold text-slate-800">IGST (%)</label>
-                        <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-md ${
-                          isIgstEnabled ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-500"
-                        }`}>
+                        <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-md ${isIgstEnabled ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-500"
+                          }`}>
                           {isIgstEnabled ? "ON" : "OFF"}
                         </span>
                       </div>
@@ -1903,15 +1891,13 @@ export function OwnerSettingsView({
                           setIsIgstEnabled(next);
                           addToast("info", next ? "IGST Enabled" : "IGST Disabled", next ? "IGST will be added to bills." : "IGST excluded from bills.");
                         }}
-                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                          isIgstEnabled ? "bg-emerald-600" : "bg-slate-300"
-                        }`}
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${isIgstEnabled ? "bg-emerald-600" : "bg-slate-300"
+                          }`}
                         title={isIgstEnabled ? "Turn off IGST" : "Turn on IGST"}
                       >
                         <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
-                            isIgstEnabled ? "translate-x-4" : "translate-x-0"
-                          }`}
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${isIgstEnabled ? "translate-x-4" : "translate-x-0"
+                            }`}
                         />
                       </button>
                     </div>
@@ -1924,11 +1910,10 @@ export function OwnerSettingsView({
                         disabled={!isIgstEnabled}
                         value={igstRatePct}
                         onChange={(e) => setIgstRatePct(parseFloat(e.target.value) || 0)}
-                        className={`w-full pl-3 pr-7 py-2 rounded-lg border font-mono font-bold text-xs focus:outline-hidden ${
-                          isIgstEnabled
+                        className={`w-full pl-3 pr-7 py-2 rounded-lg border font-mono font-bold text-xs focus:outline-hidden ${isIgstEnabled
                             ? "border-slate-200 bg-white text-slate-900 focus:border-emerald-500"
                             : "border-slate-200 bg-slate-100/70 text-slate-400 cursor-not-allowed"
-                        }`}
+                          }`}
                       />
                       <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-bold">%</span>
                     </div>
@@ -1955,12 +1940,12 @@ export function OwnerSettingsView({
                         value={
                           isGstEnabled
                             ? Number(
-                                (
-                                  (isSgstEnabled ? sgstRatePct : 0) +
-                                  (isCgstEnabled ? cgstRatePct : 0) +
-                                  (isIgstEnabled ? igstRatePct : 0)
-                                ).toFixed(2)
-                              )
+                              (
+                                (isSgstEnabled ? sgstRatePct : 0) +
+                                (isCgstEnabled ? cgstRatePct : 0) +
+                                (isIgstEnabled ? igstRatePct : 0)
+                              ).toFixed(2)
+                            )
                             : 0
                         }
                         readOnly
@@ -2231,11 +2216,10 @@ export function OwnerSettingsView({
                           key={pct}
                           type="button"
                           onClick={() => setSimDiscountPct(pct)}
-                          className={`px-2 py-0.5 rounded text-[11px] font-bold transition-all ${
-                            simDiscountPct === pct
+                          className={`px-2 py-0.5 rounded text-[11px] font-bold transition-all ${simDiscountPct === pct
                               ? "bg-sky-600 text-white"
                               : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-100"
-                          }`}
+                            }`}
                         >
                           {pct}%
                         </button>
@@ -2249,7 +2233,7 @@ export function OwnerSettingsView({
                   const gross = simServiceAmount;
                   const discountVal = isDiscountEnabled ? Math.round((gross * simDiscountPct) / 100) : 0;
                   const netTaxable = Math.max(0, gross - discountVal);
-                  
+
                   const activeCgstPct = isGstEnabled && isCgstEnabled ? cgstRatePct : 0;
                   const activeSgstPct = isGstEnabled && isSgstEnabled ? sgstRatePct : 0;
                   const activeIgstPct = isGstEnabled && isIgstEnabled ? igstRatePct : 0;
@@ -2349,10 +2333,10 @@ export function OwnerSettingsView({
                           <span>
                             {isGstEnabled
                               ? `Taxes: ${[
-                                  isSgstEnabled ? `SGST ${sgstRatePct}%` : null,
-                                  isCgstEnabled ? `CGST ${cgstRatePct}%` : null,
-                                  isIgstEnabled ? `IGST ${igstRatePct}%` : null,
-                                ].filter(Boolean).join(", ") || "None Enabled"}.`
+                                isSgstEnabled ? `SGST ${sgstRatePct}%` : null,
+                                isCgstEnabled ? `CGST ${cgstRatePct}%` : null,
+                                isIgstEnabled ? `IGST ${igstRatePct}%` : null,
+                              ].filter(Boolean).join(", ") || "None Enabled"}.`
                               : "GST is disabled."}{" "}
                             {isDiscountEnabled ? `Discounts active up to ${maxCashierDiscountPct}%.` : "Discounts locked."}
                           </span>
@@ -2601,16 +2585,14 @@ export function OwnerSettingsView({
                     <input
                       readOnly
                       type="text"
-                      value={`${API_BASE_URL}/calendar-sync/ical/feed.ics${
-                        selectedFeedBranch !== "all" ? `?branch_id=${selectedFeedBranch}` : ""
-                      }`}
+                      value={`${API_BASE_URL}/calendar-sync/ical/feed.ics${selectedFeedBranch !== "all" ? `?branch_id=${selectedFeedBranch}` : ""
+                        }`}
                       className="flex-1 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-[11px] font-mono text-slate-700 select-all"
                     />
                     <button
                       onClick={() => {
-                        const url = `${API_BASE_URL}/calendar-sync/ical/feed.ics${
-                          selectedFeedBranch !== "all" ? `?branch_id=${selectedFeedBranch}` : ""
-                        }`;
+                        const url = `${API_BASE_URL}/calendar-sync/ical/feed.ics${selectedFeedBranch !== "all" ? `?branch_id=${selectedFeedBranch}` : ""
+                          }`;
                         navigator.clipboard.writeText(url);
                         setIcalCopied(true);
                         addToast("success", "Feed URL Copied", "Subscribe in Apple Calendar / Outlook / Google.");
@@ -2628,9 +2610,8 @@ export function OwnerSettingsView({
               {/* Action Buttons */}
               <div className="grid grid-cols-2 gap-3 pt-2">
                 <a
-                  href={`${API_BASE_URL}/calendar-sync/ical/feed.ics${
-                    selectedFeedBranch !== "all" ? `?branch_id=${selectedFeedBranch}` : ""
-                  }`}
+                  href={`${API_BASE_URL}/calendar-sync/ical/feed.ics${selectedFeedBranch !== "all" ? `?branch_id=${selectedFeedBranch}` : ""
+                    }`}
                   download="salon_appointments.ics"
                   className="py-2.5 px-3 rounded-xl border border-sky-200 bg-sky-50 hover:bg-sky-100 text-sky-800 text-xs font-bold text-center flex items-center justify-center gap-2 transition-colors"
                 >
@@ -2693,6 +2674,7 @@ export function OwnerSettingsView({
                         type="text"
                         value={waPhone}
                         onChange={(e) => setWaPhone(e.target.value)}
+                        placeholder="e.g. +91 98765 43210"
                         className="w-full px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-mono text-slate-900 bg-slate-50 focus:bg-white focus:outline-hidden"
                       />
                     </div>
@@ -2720,6 +2702,7 @@ export function OwnerSettingsView({
                         type="text"
                         value={waCustomerName}
                         onChange={(e) => setWaCustomerName(e.target.value)}
+                        placeholder="e.g. Guest Name"
                         className="w-full px-2.5 py-1 rounded-lg border border-slate-200 text-xs text-slate-900 bg-slate-50"
                       />
                     </div>
@@ -2729,6 +2712,7 @@ export function OwnerSettingsView({
                         type="text"
                         value={waServiceName}
                         onChange={(e) => setWaServiceName(e.target.value)}
+                        placeholder="e.g. Hair Styling"
                         className="w-full px-2.5 py-1 rounded-lg border border-slate-200 text-xs text-slate-900 bg-slate-50"
                       />
                     </div>
@@ -2738,6 +2722,7 @@ export function OwnerSettingsView({
                         type="text"
                         value={waAmount}
                         onChange={(e) => setWaAmount(e.target.value)}
+                        placeholder="e.g. 1500"
                         className="w-full px-2.5 py-1 rounded-lg border border-slate-200 text-xs text-slate-900 bg-slate-50"
                       />
                     </div>
@@ -2759,19 +2744,23 @@ export function OwnerSettingsView({
 
               <button
                 onClick={async () => {
+                  if (!waPhone.trim()) {
+                    addToast("warning", "Recipient Required", "Please enter a valid recipient phone number.");
+                    return;
+                  }
                   setWaSending(true);
                   try {
                     const res = await fetch(`${API_BASE_URL}/crm_modules/whatsapp/send`, {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({
-                        phone: waPhone,
+                        phone: waPhone.trim(),
                         template: waTemplate,
                         variables: {
-                          customer_name: waCustomerName,
-                          service_name: waServiceName,
-                          amount: waAmount,
-                          date_time: waDate,
+                          customer_name: waCustomerName.trim() || "Valued Guest",
+                          service_name: waServiceName.trim() || "Salon Service",
+                          amount: waAmount.trim() || "0",
+                          date_time: waDate.trim() || new Date().toLocaleString([], { dateStyle: "medium", timeStyle: "short" }),
                           booking_ref: `BK-${Math.floor(1000 + Math.random() * 9000)}`
                         }
                       })
@@ -2931,7 +2920,7 @@ export function OwnerSettingsView({
                   </div>
                   <div className="space-y-1 text-xs">
                     <div className="text-slate-400 text-[11px]">Last Scanned SKU:</div>
-                    <div className="text-purple-300 font-bold tracking-wider text-sm">{lastScannedCode}</div>
+                    <div className="text-purple-300 font-bold tracking-wider text-sm">{lastScannedCode || "—"}</div>
                     <div className="text-slate-400 text-[11px] pt-1">Matched Catalog Item:</div>
                     <div className="text-emerald-300 font-sans font-medium text-xs">{scannerMatchedItem}</div>
                   </div>
@@ -3275,8 +3264,12 @@ export function OwnerSettingsView({
                       </label>
                     </div>
 
-                    <div className="h-24 rounded-xl overflow-hidden border border-slate-200 bg-slate-100 relative">
-                      <img src={branchImage} alt="Cover Preview" className="w-full h-full object-cover" />
+                    <div className="h-24 rounded-xl overflow-hidden border border-slate-200 bg-slate-100 relative flex items-center justify-center">
+                      {branchImage ? (
+                        <img src={branchImage} alt="Cover Preview" className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-[11px] text-slate-400">No cover image uploaded</span>
+                      )}
                     </div>
 
                     <input
@@ -3309,7 +3302,11 @@ export function OwnerSettingsView({
                     </div>
 
                     <div className="h-24 rounded-xl overflow-hidden border border-slate-200 bg-white flex items-center justify-center p-2">
-                      <img src={branchLogo} alt="Logo Preview" className="max-h-full object-contain rounded-lg" />
+                      {branchLogo ? (
+                        <img src={branchLogo} alt="Logo Preview" className="max-h-full object-contain rounded-lg" />
+                      ) : (
+                        <span className="text-[11px] text-slate-400">No logo uploaded</span>
+                      )}
                     </div>
 
                     <input
@@ -3360,6 +3357,7 @@ export function OwnerSettingsView({
                       type="number"
                       value={branchTaxRate}
                       onChange={(e) => setBranchTaxRate(e.target.value)}
+                      placeholder="e.g. 18"
                       className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono text-slate-900 bg-slate-50/50 focus:bg-white focus:outline-hidden"
                     />
                   </div>
@@ -3370,6 +3368,7 @@ export function OwnerSettingsView({
                       type="number"
                       value={branchChairs}
                       onChange={(e) => setBranchChairs(e.target.value)}
+                      placeholder="e.g. 8"
                       className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono text-slate-900 bg-slate-50/50 focus:bg-white focus:outline-hidden"
                     />
                   </div>
@@ -3380,6 +3379,7 @@ export function OwnerSettingsView({
                       type="text"
                       value={branchHours}
                       onChange={(e) => setBranchHours(e.target.value)}
+                      placeholder="e.g. 09:00 AM - 09:00 PM"
                       className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 bg-slate-50/50 focus:bg-white focus:outline-hidden"
                     />
                   </div>

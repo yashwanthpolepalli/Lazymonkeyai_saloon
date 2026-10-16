@@ -1,5 +1,5 @@
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 
 class BeautyProfileSchema(BaseModel):
     hair_type: Optional[str] = None
@@ -51,6 +51,14 @@ class CustomerBase(BaseModel):
     allergies: List[str] = []
     notes: Optional[str] = None
 
+    @field_validator("preferred_branch_id", "preferred_stylist_id", "email", mode="before")
+    @classmethod
+    def sanitize_empty_strings(cls, v):
+        if isinstance(v, str):
+            trimmed = v.strip()
+            return trimmed if trimmed else None
+        return v
+
 class CustomerCreate(BaseModel):
     name: str
     phone: str
@@ -59,6 +67,14 @@ class CustomerCreate(BaseModel):
     tier: Optional[str] = None
     preferred_branch_id: Optional[str] = None
     notes: Optional[str] = None
+
+    @field_validator("preferred_branch_id", "email", mode="before")
+    @classmethod
+    def sanitize_create_strings(cls, v):
+        if isinstance(v, str):
+            trimmed = v.strip()
+            return trimmed if trimmed else None
+        return v
 
 class CustomerUpdate(BaseModel):
     name: Optional[str] = None
@@ -82,6 +98,14 @@ class CustomerUpdate(BaseModel):
     allergies: Optional[List[str]] = None
     notes: Optional[str] = None
 
+    @field_validator("preferred_branch_id", "preferred_stylist_id", "email", mode="before")
+    @classmethod
+    def sanitize_update_strings(cls, v):
+        if isinstance(v, str):
+            trimmed = v.strip()
+            return trimmed if trimmed else None
+        return v
+
 class CustomerResponse(CustomerBase):
     id: str
 
@@ -98,6 +122,25 @@ class WalletBalanceResponse(BaseModel):
     balance: float
     currency: str = "INR"
     history: List[Dict[str, Any]] = []
+
+class WalletTopUpPackBase(BaseModel):
+    name: str
+    amount: float
+    bonus: float = 0.0
+    badge: Optional[str] = None
+    is_popular: bool = False
+    display_order: int = 0
+
+class WalletTopUpPackCreate(WalletTopUpPackBase):
+    pass
+
+class WalletTopUpPackResponse(WalletTopUpPackBase):
+    id: str
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
 
 class MembershipTierBase(BaseModel):
     name: str

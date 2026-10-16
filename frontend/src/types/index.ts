@@ -338,6 +338,10 @@ export interface CustomerMembership {
   expiresAt: string;
   remainingBlowouts: number;
   totalSaved: number;
+  membershipId?: string;
+  startDate?: string;
+  pricePaid?: number;
+  discountPercentage?: number;
 }
 
 export interface CustomerPackage {
@@ -532,7 +536,7 @@ export interface Employee {
   phone: string;
   avatar: string;
   branchId: string;
-  department: "Hair Styling" | "Esthetics & Spa" | "Nail Art" | "Management" | "Front Desk";
+  department: "Hair Styling" | "Esthetics & Spa" | "Nail Art" | "Management" | "Front Desk" | string;
   designation: string;
   tier: StylistTier;
   joinDate: string;
@@ -541,7 +545,7 @@ export interface Employee {
   status: "active" | "on_leave" | "probation";
   code?: string;
   reportingManager?: string;
-  employmentType?: "Full-Time" | "Part-Time" | "Contract";
+  employmentType?: "Full-Time" | "Part-Time" | "Contract" | string;
   basicSalary?: number;
   hra?: number;
   allowances?: number;

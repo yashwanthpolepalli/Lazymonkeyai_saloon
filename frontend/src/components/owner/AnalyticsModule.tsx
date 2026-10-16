@@ -41,7 +41,7 @@ export function AnalyticsModule() {
       branches.forEach((b) => {
         const branchAppts = appointments.filter((a) => a.branchId === b.id);
         const rev = branchAppts.reduce((acc, curr) => acc + (curr.finalTotal || curr.subtotal || 0), 0);
-        row[b.name || `Branch ${b.code || ""}`] = rev || (idx + 1) * 15000;
+        row[b.name || `Branch ${b.code || ""}`] = rev || (idx + 1) * 1;
       });
       return row;
     });

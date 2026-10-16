@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from src.core.database import get_db
 from src.models.hrms import Employee, AttendanceRecord
 from src.schemas.hrms import (
-    AttendanceClockRequest, AttendanceClockResponse, AttendanceRecordResponse
+    AttendanceClockRequest, AttendanceClockResponse, AttendanceRecordResponse, AttendanceManualCreate
 )
 
 router = APIRouter(prefix="/hrms/attendance", tags=["HRMS - Attendance & Clocking"])
@@ -18,6 +18,27 @@ def get_attendance_records(date: Optional[str] = None, employee_id: Optional[str
     if employee_id:
         query = query.filter(AttendanceRecord.employee_id == employee_id)
     return query.order_by(AttendanceRecord.date.desc()).all()
+
+@router.post("", response_model=AttendanceRecordResponse)
+def create_attendance_record(req: AttendanceManualCreate, db: Session = Depends(get_db)):
+    emp = db.query(Employee).filter(Employee.id == req.employee_id).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    record = AttendanceRecord(
+        employee_id=emp.id,
+        employee_name=emp.name,
+        date=req.date,
+        check_in=req.check_in,
+        check_out=req.check_out,
+        status=req.status,
+        working_hours=req.working_hours,
+        active_shift_hours=req.working_hours,
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return record
 
 @router.post("/clock", response_model=AttendanceClockResponse)
 def clock_attendance(req: AttendanceClockRequest, db: Session = Depends(get_db)):

@@ -27,7 +27,7 @@ from src.models.inventory import InventoryProduct
 
 import json
 
-def bulk_import(file_path: str, data_type: str = "services", mode: str = "append", batch_size: int = 5000):
+def bulk_import(file_path: str, data_type: str = "services", mode: str = "append", batch_size: int = 1000):
     if not os.path.exists(file_path):
         print(f"❌ Error: File not found at '{file_path}'")
         sys.exit(1)
@@ -115,16 +115,16 @@ def bulk_import(file_path: str, data_type: str = "services", mode: str = "append
                         cat_cache[cat_name.lower()] = cat_id
 
                     try:
-                        price = float(row.get("Base Price (INR)") or row.get("Base Price") or row.get("Price") or 2000)
+                        price = float(row.get("Base Price (INR)") or row.get("Base Price") or row.get("Price") or 0.0)
                     except:
-                        price = 2000.0
+                        price = 0.0
 
                     try:
-                        duration = int(row.get("Duration (Minutes)") or row.get("Duration") or 45)
+                        duration = int(row.get("Duration (Minutes)") or row.get("Duration") or 0)
                     except:
-                        duration = 45
+                        duration = 0
 
-                    desc = row.get("Short Description") or row.get("Description") or "Salon treatment service."
+                    desc = row.get("Short Description") or row.get("Description") or ""
                     gender_raw = (row.get("Gender") or "unisex").lower()
                     gender_list = ["women"] if "women" in gender_raw and "men" not in gender_raw else ["men"] if "men" in gender_raw and "women" not in gender_raw else ["unisex"]
 
@@ -134,9 +134,9 @@ def bulk_import(file_path: str, data_type: str = "services", mode: str = "append
                         category_id=cat_id,
                         category_name=cat_name,
                         base_price=price,
-                        duration_minutes=duration,
-                        short_desc=desc,
-                        full_desc=desc,
+                        duration_minutes=duration if duration > 0 else None,
+                        short_desc=desc if desc else None,
+                        full_desc=desc if desc else None,
                         gender=gender_list,
                         branch_ids=[],
                         is_active=True
@@ -149,15 +149,20 @@ def bulk_import(file_path: str, data_type: str = "services", mode: str = "append
                         rows_skipped += 1
                         continue
 
+                    try:
+                        loyalty_pts = int(row.get("Loyalty Points") or 0)
+                    except:
+                        loyalty_pts = 0
+
                     batch.append(Customer(
                         id=str(uuid.uuid4()),
                         name=name.strip(),
                         phone=phone.strip(),
                         email=(row.get("Email Address") or row.get("Email") or "").strip() or None,
-                        wallet_balance=float(row.get("Wallet Balance (INR)") or 0),
-                        loyalty_points=int(row.get("Loyalty Points") or 100),
-                        membership_tier=row.get("Membership Tier") or "Rose Silver",
-                        segment=row.get("Segment") or "Regular Loyalist",
+                        wallet_balance=float(row.get("Wallet Balance (INR)") or 0.0),
+                        loyalty_points=loyalty_pts,
+                        membership_tier=row.get("Membership Tier") or "Standard",
+                        segment=row.get("Segment") or "New Customer",
                         is_active=True
                     ))
 
@@ -172,12 +177,12 @@ def bulk_import(file_path: str, data_type: str = "services", mode: str = "append
                         id=str(uuid.uuid4()),
                         sku=sku.strip(),
                         name=prod_name.strip(),
-                        brand=row.get("Brand") or "Professional",
-                        category=row.get("Category") or "Salon Care",
+                        brand=row.get("Brand") or "",
+                        category=row.get("Category") or "General",
                         unit=row.get("Unit") or "units",
-                        cost_price=float(row.get("Cost Price") or 0),
-                        retail_price=float(row.get("Retail Price") or 0),
-                        current_stock=int(row.get("Current Stock") or 50),
+                        cost_price=float(row.get("Cost Price") or 0.0),
+                        retail_price=float(row.get("Retail Price") or 0.0),
+                        current_stock=int(row.get("Current Stock") or 0),
                         is_active=True
                     ))
 
@@ -216,7 +221,7 @@ if __name__ == "__main__":
     parser.add_argument("file", help="Path to CSV file")
     parser.add_argument("--type", choices=["services", "customers", "inventory"], default="services", help="Data type / target table")
     parser.add_argument("--mode", choices=["append", "replace"], default="append", help="Append or replace records")
-    parser.add_argument("--batch-size", type=int, default=5000, help="Batch size for DB commit")
+    parser.add_argument("--batch-size", type=int, default=1000, help="Batch size for DB commit")
     args = parser.parse_args()
 
     bulk_import(args.file, data_type=args.type, mode=args.mode, batch_size=args.batch_size)

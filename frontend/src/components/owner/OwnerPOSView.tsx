@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useSalon } from "@/context/SalonContext";
-import { GenderType } from "@/types";
+import { GenderType, Customer } from "@/types";
 import {
   CreditCard,
   ShoppingBag,
@@ -23,6 +23,7 @@ import {
   Usb,
 } from "lucide-react";
 import confetti from "canvas-confetti";
+import { PettyCashService, GiftVoucherService, POSService } from "@/services/apiClient";
 
 export function OwnerPOSView() {
   const {
@@ -34,13 +35,19 @@ export function OwnerPOSView() {
     selectedBranch,
     currentCustomer,
     setCurrentCustomer,
+    currentUser,
     gstSettings,
     addToast,
   } = useSalon();
 
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string>(
-    customers[0]?.id || ""
-  );
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const paramId = params.get("customerId") || params.get("customer_id");
+      if (paramId && paramId !== "walk_in") return paramId;
+    }
+    return "walk_in";
+  });
   const [selectedStylistId, setSelectedStylistId] = useState<string>(
     stylists[0]?.id || ""
   );
@@ -66,7 +73,7 @@ export function OwnerPOSView() {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       const isInput = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
-      
+
       const currentTime = Date.now();
       const timeDiff = currentTime - lastKeyTime;
       lastKeyTime = currentTime;
@@ -136,50 +143,158 @@ export function OwnerPOSView() {
   const [voucherCodeInput, setVoucherCodeInput] = useState<string>("");
   const [appliedVoucherAmount, setAppliedVoucherAmount] = useState<number>(0);
   const [appliedVoucherCode, setAppliedVoucherCode] = useState<string | null>(null);
+  const [isValidatingVoucher, setIsValidatingVoucher] = useState<boolean>(false);
 
   // Cash Register & Petty Cash State
-  const [openingFloat] = useState<number>(5000);
+  const [activeSession, setActiveSession] = useState<any | null>(null);
+  const [openingFloat, setOpeningFloat] = useState<number>(0);
+  const [isOpeningSessionOpen, setIsOpeningSessionOpen] = useState<boolean>(false);
+  const [openingCashInput, setOpeningCashInput] = useState<string>("");
   const [isPettyCashOpen, setIsPettyCashOpen] = useState<boolean>(false);
   const [isCloseShiftOpen, setIsCloseShiftOpen] = useState<boolean>(false);
   const [closingCashInput, setClosingCashInput] = useState<string>("");
   const [shiftReport, setShiftReport] = useState<any | null>(null);
+  const [isLoadingPettyCash, setIsLoadingPettyCash] = useState<boolean>(false);
+  const [isSubmittingPettyCash, setIsSubmittingPettyCash] = useState<boolean>(false);
+  const [isClosingShift, setIsClosingShift] = useState<boolean>(false);
 
   // Petty Cash Payouts State
-  const [pettyCashCategory, setPettyCashCategory] = useState("Tea & Refreshments");
-  const [pettyCashAmount, setPettyCashAmount] = useState(250);
-  const [pettyCashPaidTo, setPettyCashPaidTo] = useState("Local Vendor");
-  const [pettyCashApprovedBy, setPettyCashApprovedBy] = useState("Store Manager");
-  const [pettyCashList, setPettyCashList] = useState<any[]>([
-    {
-      id: "pc_01",
-      voucher_no: "PETTY-8491",
-      category: "Tea & Refreshments",
-      amount: 180,
-      date: "2026-03-27 11:30",
-      paid_to: "Chai Express",
-      approved_by: "Store Manager",
-    },
-    {
-      id: "pc_02",
-      voucher_no: "PETTY-8492",
-      category: "Salon Cleaning & Laundry",
-      amount: 350,
-      date: "2026-03-27 14:15",
-      paid_to: "Quick Clean Drycleaners",
-      approved_by: "Store Manager",
-    },
-  ]);
+  const [pettyCashCategory, setPettyCashCategory] = useState("");
+  const [pettyCashAmount, setPettyCashAmount] = useState<string>("");
+  const [pettyCashPaidTo, setPettyCashPaidTo] = useState("");
+  const [pettyCashApprovedBy, setPettyCashApprovedBy] = useState("");
+  const [pettyCashList, setPettyCashList] = useState<any[]>([]);
 
-  const activeCustomer = customers.find((c) => c.id === selectedCustomerId) || customers[0];
+  // Synchronize approver with logged in user
+  useEffect(() => {
+    if (currentUser?.name && !pettyCashApprovedBy) {
+      setPettyCashApprovedBy(currentUser.name);
+    }
+  }, [currentUser?.name]);
+
+  const WALK_IN_CUSTOMER: Customer = {
+    id: "walk_in",
+    name: "Walk-in Customer",
+    email: "",
+    phone: "",
+    avatar: "",
+    gender: "other",
+    joinedDate: new Date().toISOString(),
+    preferredBranchId: selectedBranch?.id || "branch_01",
+    walletBalance: 0,
+    loyaltyPoints: 0,
+    membershipTier: "Regular",
+    packages: [],
+    beautyProfile: {
+      skinType: "Normal",
+      hairType: "Normal",
+      hairTexture: "Medium",
+      scalpCondition: "Healthy",
+      skinConcerns: [],
+      allergies: [],
+      preferredBeverage: "Water",
+      preferredMusic: "Ambient",
+      lastConsultationDate: "",
+    },
+    totalSpent: 0,
+    visitsCount: 0,
+    segment: "New Customer",
+    tags: ["walk-in"],
+    notes: "Walk-in guest",
+  };
+
+  // Synchronize customer selection with URL param, or default walk-in
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const paramId = params.get("customerId") || params.get("customer_id");
+      if (paramId && paramId !== "walk_in") {
+        if (paramId !== selectedCustomerId) {
+          setSelectedCustomerId(paramId);
+        }
+        const match = customers.find((c) => c.id === paramId);
+        if (match && currentCustomer?.id !== paramId) {
+          setCurrentCustomer(match);
+        }
+        return;
+      }
+    }
+
+    if (!selectedCustomerId) {
+      setSelectedCustomerId("walk_in");
+    }
+  }, [customers, selectedCustomerId]);
+
+  useEffect(() => {
+    if (!selectedStylistId && stylists.length > 0) {
+      setSelectedStylistId(stylists[0].id);
+    }
+  }, [stylists, selectedStylistId]);
+
+  // Fetch live active register session and petty cash vouchers from PostgreSQL backend
+  useEffect(() => {
+    const branchId = selectedBranch?.id || "branch_01";
+    let isMounted = true;
+
+    const loadSessionAndPettyCash = async () => {
+      let openCode: string | undefined = undefined;
+      try {
+        const session = await PettyCashService.getActiveSession(branchId);
+        if (isMounted) {
+          if (session && session.status === "open") {
+            setActiveSession(session);
+            setOpeningFloat(Number(session.opening_cash || 0));
+            openCode = session.session_code;
+          } else {
+            setActiveSession(null);
+            setOpeningFloat(0);
+          }
+        }
+      } catch (err) {
+        console.warn("Could not load active session:", err);
+      }
+
+      setIsLoadingPettyCash(true);
+      try {
+        if (openCode) {
+          const expenses = await PettyCashService.getPettyCashExpenses(branchId, openCode);
+          if (isMounted && Array.isArray(expenses)) {
+            setPettyCashList(expenses);
+          }
+        } else {
+          if (isMounted) {
+            setPettyCashList([]);
+          }
+        }
+      } catch (err) {
+        console.warn("Could not load petty cash expenses:", err);
+      } finally {
+        if (isMounted) setIsLoadingPettyCash(false);
+      }
+    };
+
+    loadSessionAndPettyCash();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedBranch?.id]);
+
+  const isWalkIn = !selectedCustomerId || selectedCustomerId === "walk_in";
+  const activeCustomer: Customer = isWalkIn
+    ? WALK_IN_CUSTOMER
+    : customers.find((c) => c.id === selectedCustomerId) ||
+      (currentCustomer?.id && currentCustomer.id !== "walk_in" ? currentCustomer : null) ||
+      WALK_IN_CUSTOMER;
 
   const subtotal = cartItems.reduce((sum, item) => sum + item.price * (item.qty || 1), 0);
   const totalItemCount = cartItems.reduce((sum, item) => sum + (item.qty || 1), 0);
-  
+
   const effectiveDiscountPercent = gstSettings.isDiscountEnabled ? discountPercent : 0;
   const discountAmount = Math.round((subtotal * effectiveDiscountPercent) / 100);
-  
+
   const taxableAmount = Math.max(0, subtotal - discountAmount - appliedVoucherAmount);
-  
+
   const isSgstActive = gstSettings.isGstEnabled && (gstSettings.isSgstEnabled ?? true);
   const isCgstActive = gstSettings.isGstEnabled && (gstSettings.isCgstEnabled ?? true);
   const isIgstActive = gstSettings.isGstEnabled && (gstSettings.isIgstEnabled ?? false);
@@ -197,57 +312,152 @@ export function OwnerPOSView() {
   const taxAmount = sgstAmount + cgstAmount + igstAmount;
   const finalTotal = taxableAmount + taxAmount;
 
-  // Petty cash total
-  const totalPettyCash = pettyCashList.reduce((sum, p) => sum + (p.amount || 0), 0);
+  // Petty cash total from live database list
+  const totalPettyCash = pettyCashList.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
-  const handleApplyVoucher = () => {
+  const handleApplyVoucher = async () => {
     if (!voucherCodeInput.trim()) {
       addToast("warning", "Code Required", "Please enter a gift voucher or pass code.");
       return;
     }
     const code = voucherCodeInput.trim().toUpperCase();
-    if (code.includes("GLOW") || code.includes("GV") || code.includes("FESTIVE")) {
-      const discountVal = 1000;
-      setAppliedVoucherAmount(discountVal);
-      setAppliedVoucherCode(code);
-      addToast("success", "Voucher Redeemed", `Applied ₹${discountVal} voucher discount from code ${code}.`);
-    } else {
-      addToast("error", "Invalid Voucher", `Voucher code '${code}' not found or already expired.`);
+    setIsValidatingVoucher(true);
+    try {
+      const voucher = await GiftVoucherService.validateVoucher(code);
+      if (voucher && voucher.remaining_balance > 0) {
+        const balance = Number(voucher.remaining_balance);
+        const billPayableBeforeVoucher = Math.max(0, subtotal - discountAmount);
+        const discountVal = billPayableBeforeVoucher > 0 ? Math.min(billPayableBeforeVoucher, balance) : balance;
+        setAppliedVoucherAmount(discountVal);
+        setAppliedVoucherCode(voucher.code);
+        addToast(
+          "success",
+          "Voucher Applied",
+          `Applied ₹${discountVal.toLocaleString()} from ${voucher.title || "Gift Voucher"} (Code: ${voucher.code}, Available: ₹${balance.toLocaleString()}).`
+        );
+      } else {
+        addToast("error", "Invalid Voucher", "This voucher has no remaining balance or has already been redeemed.");
+      }
+    } catch (err: any) {
+      addToast(
+        "error",
+        "Invalid Voucher",
+        err.message || `Voucher code '${code}' not found or already expired.`
+      );
+    } finally {
+      setIsValidatingVoucher(false);
     }
   };
 
-  const handleRecordPettyCash = (e: React.FormEvent) => {
+  const handleRecordPettyCash = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newEntry = {
-      id: `pc_${Date.now()}`,
-      voucher_no: `PETTY-${Math.floor(1000 + Math.random() * 9000)}`,
-      category: pettyCashCategory,
-      amount: Number(pettyCashAmount),
-      date: new Date().toLocaleString([], { hour12: false }),
-      paid_to: pettyCashPaidTo,
-      approved_by: pettyCashApprovedBy,
-    };
-    setPettyCashList([newEntry, ...pettyCashList]);
-    addToast("info", "Petty Cash Recorded", `Voucher ${newEntry.voucher_no} for ₹${pettyCashAmount} disbursed from cash drawer.`);
-    setIsPettyCashOpen(false);
+    const amountNum = Number(pettyCashAmount);
+    if (!amountNum || amountNum <= 0) {
+      addToast("warning", "Invalid Amount", "Please enter a valid disbursement amount greater than 0.");
+      return;
+    }
+    if (!pettyCashPaidTo.trim()) {
+      addToast("warning", "Recipient Required", "Please specify who received the cash disbursement.");
+      return;
+    }
+
+    setIsSubmittingPettyCash(true);
+    try {
+      const branchId = selectedBranch?.id || "branch_01";
+      const approver = pettyCashApprovedBy.trim() || currentUser?.name || "Store Manager";
+      const payload = {
+        branch_id: branchId,
+        session_code: activeSession?.session_code || undefined,
+        category: pettyCashCategory,
+        amount: amountNum,
+        paid_to: pettyCashPaidTo.trim(),
+        approved_by: approver,
+        date: new Date().toLocaleString([], { hour12: false }),
+        payment_mode: "cash_drawer",
+      };
+
+      const newEntry = await PettyCashService.recordExpense(payload);
+      setPettyCashList((prev) => [newEntry, ...prev]);
+      addToast(
+        "info",
+        "Petty Cash Recorded",
+        `Voucher ${newEntry.voucher_no} for ₹${amountNum.toLocaleString()} disbursed from cash drawer.`
+      );
+      setPettyCashAmount("");
+      setPettyCashPaidTo("");
+      setIsPettyCashOpen(false);
+    } catch (err: any) {
+      addToast("error", "Error Recording Petty Cash", err.message || "Could not record petty cash payout.");
+    } finally {
+      setIsSubmittingPettyCash(false);
+    }
   };
 
-  const handleCloseShiftAudit = (e: React.FormEvent) => {
+  const handleOpenShift = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const openingAmt = Number(openingCashInput);
+    if (isNaN(openingAmt) || openingAmt < 0) {
+      addToast("warning", "Invalid Float", "Please enter a valid opening cash float.");
+      return;
+    }
+    try {
+      const branchId = selectedBranch?.id || "branch_01";
+      const openedBy = currentUser?.name || "Store Manager";
+      const session = await PettyCashService.openSession({
+        branch_id: branchId,
+        opened_by: openedBy,
+        opening_cash: openingAmt,
+      });
+      setActiveSession(session);
+      setOpeningFloat(Number(session.opening_cash || openingAmt));
+      setPettyCashList([]);
+      setIsOpeningSessionOpen(false);
+      setOpeningCashInput("");
+      addToast("success", "Shift Started", `Session #${session.session_code} opened with ₹${openingAmt.toLocaleString()} float.`);
+    } catch (err: any) {
+      addToast("error", "Error Opening Shift", err.message || "Failed to open register session.");
+    }
+  };
+
+  const handleCloseShiftAudit = async (e: React.FormEvent) => {
     e.preventDefault();
     const counted = Number(closingCashInput);
-    const expected = openingFloat + (paymentMode === "cash" ? finalTotal : 0) - totalPettyCash;
+    const expected = (openingFloat ?? 0) + (paymentMode === "cash" ? finalTotal : 0) - totalPettyCash;
     const variance = counted - expected;
-    
-    setShiftReport({
-      sessionCode: "SES-260327-01",
-      openingFloat,
-      pettyExpenses: totalPettyCash,
-      expectedCash: expected,
-      countedCash: counted,
-      variance,
-      status: variance === 0 ? "Balanced" : variance > 0 ? "Overage" : "Shortage",
-      closedAt: new Date().toLocaleTimeString(),
-    });
+    const statusText = variance === 0 ? "Balanced" : variance > 0 ? "Overage" : "Shortage";
+    const closedByName = currentUser?.name || "Store Manager";
+
+    setIsClosingShift(true);
+    try {
+      if (activeSession?.id) {
+        await PettyCashService.closeSession(activeSession.id, {
+          closed_by: closedByName,
+          closing_cash: counted,
+          expected_cash: expected,
+          cash_difference: variance,
+          notes: `Shift audit ${statusText}. Variance: ₹${variance}. Petty Expenses: ₹${totalPettyCash}`,
+        });
+      }
+
+      setShiftReport({
+        sessionCode: activeSession?.session_code || `SES-${new Date().toISOString().slice(2, 10).replace(/-/g, "")}`,
+        openingFloat,
+        pettyExpenses: totalPettyCash,
+        expectedCash: expected,
+        countedCash: counted,
+        variance,
+        status: statusText,
+        closedAt: new Date().toLocaleTimeString(),
+      });
+      setActiveSession(null);
+      setOpeningFloat(0);
+      setPettyCashList([]);
+      addToast("info", "Shift Closed", `Z-Report generated with status: ${statusText}.`);
+    } catch (err: any) {
+      addToast("error", "Error Closing Shift", err.message || "Could not close register session.");
+    } finally {
+      setIsClosingShift(false);
+    }
   };
 
 
@@ -271,7 +481,7 @@ export function OwnerPOSView() {
     setCartItems(cartItems.filter((_, i) => i !== idx));
   };
 
-  const handleCheckoutAndPrint = () => {
+  const handleCheckoutAndPrint = async () => {
     if (cartItems.length === 0) {
       addToast("warning", "Empty Bill", "Please add at least one service or retail product.");
       return;
@@ -297,11 +507,55 @@ export function OwnerPOSView() {
       origin: { y: 0.6 },
     });
 
+    if (appliedVoucherCode && appliedVoucherAmount > 0) {
+      try {
+        await GiftVoucherService.redeemVoucher({
+          code: appliedVoucherCode,
+          amount_to_redeem: appliedVoucherAmount,
+        });
+      } catch (err) {
+        console.warn("Could not redeem voucher on backend:", err);
+      }
+    }
+
+    try {
+      await POSService.createTransaction({
+        customerId: activeCustomer?.id === "walk_in" ? undefined : activeCustomer?.id,
+        customerName: activeCustomer?.name || "Walk-in Customer",
+        customerPhone: activeCustomer?.phone || undefined,
+        branchId: selectedBranch?.id || "branch_01",
+        branchName: selectedBranch?.name || "Main Branch",
+        items: cartItems.map((item) => ({
+          id: item.id,
+          name: item.name,
+          price: item.price,
+          quantity: item.qty || 1,
+          type: item.type,
+          duration_minutes: item.duration,
+        })),
+        subtotal,
+        discountAmount,
+        gstAmount: taxAmount,
+        tipAmount: 0,
+        totalAmount: finalTotal,
+        paymentMode,
+        cashierName: currentUser?.name || "Cashier",
+        notes: appliedVoucherCode ? `Voucher ${appliedVoucherCode} applied (-₹${appliedVoucherAmount})` : undefined,
+      });
+    } catch (err) {
+      console.warn("Could not save POS transaction to backend:", err);
+    }
+
     addToast(
       "success",
       "Invoice Generated & Settled!",
       `Bill ${inv.id} for ₹${finalTotal.toLocaleString()} settled via ${paymentMode.toUpperCase()}.`
     );
+
+    setCartItems([]);
+    setAppliedVoucherAmount(0);
+    setAppliedVoucherCode(null);
+    setVoucherCodeInput("");
   };
 
   const getComputedPricing = (s: any) => {
@@ -365,30 +619,53 @@ export function OwnerPOSView() {
             <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
               Point of Sale & Register Terminal
             </span>
-            <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
-              Session #SES-260327-01 &bull; Open
-            </span>
+            {activeSession ? (
+              <span className="text-xs font-mono font-medium text-emerald-800 bg-emerald-50 border border-emerald-200/70 px-2 py-0.5 rounded-md">
+                Session #{activeSession.session_code} &bull; Open
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsOpeningSessionOpen(true)}
+                className="text-xs font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200/80 px-2 py-0.5 rounded-md cursor-pointer transition-colors"
+              >
+                + Open Shift Drawer
+              </button>
+            )}
           </div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
             Salon POS & Billings
           </h1>
           <p className="text-xs text-slate-500">
-            Quick itemized billing, voucher redemption, petty cash drawer, and shift reconciliation.
+            Quick itemized billing, live gift vouchers, petty cash drawer, and shift reconciliation.
           </p>
         </div>
 
         {/* Register Actions & Cash Drawer Snapshot */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="bg-slate-50 border border-slate-200 px-3.5 py-2 rounded-2xl flex items-center gap-4 text-xs font-mono">
-            <div>
-              <span className="text-[10px] text-slate-400 block uppercase">Float:</span>
-              <span className="font-bold text-slate-800">₹{openingFloat.toLocaleString()}</span>
+          {activeSession ? (
+            <div className="bg-slate-50 border border-slate-200 px-3.5 py-2 rounded-2xl flex items-center gap-4 text-xs font-mono">
+              <div>
+                <span className="text-[10px] text-slate-400 block uppercase">Float:</span>
+                <span className="font-bold text-slate-800">₹{(openingFloat ?? 0).toLocaleString()}</span>
+              </div>
+              <div className="border-l border-slate-200 pl-3">
+                <span className="text-[10px] text-slate-400 block uppercase">Petty Out:</span>
+                <span className="font-bold text-rose-600">-₹{totalPettyCash.toLocaleString()}</span>
+              </div>
             </div>
-            <div className="border-l border-slate-200 pl-3">
-              <span className="text-[10px] text-slate-400 block uppercase">Petty Out:</span>
-              <span className="font-bold text-rose-600">-₹{totalPettyCash.toLocaleString()}</span>
+          ) : (
+            <div className="bg-slate-50 border border-slate-200 px-3.5 py-2 rounded-2xl flex items-center gap-4 text-xs font-mono text-slate-400">
+              <div>
+                <span className="text-[10px] block uppercase">Float:</span>
+                <span className="font-semibold text-slate-500">Drawer Closed</span>
+              </div>
+              <div className="border-l border-slate-200 pl-3">
+                <span className="text-[10px] block uppercase">Petty Out:</span>
+                <span className="font-semibold text-slate-500">₹0</span>
+              </div>
             </div>
-          </div>
+          )}
 
           <button
             onClick={() => setIsPettyCashOpen(true)}
@@ -399,11 +676,17 @@ export function OwnerPOSView() {
           </button>
 
           <button
-            onClick={() => setIsCloseShiftOpen(true)}
+            onClick={() => {
+              if (activeSession) {
+                setIsCloseShiftOpen(true);
+              } else {
+                setIsOpeningSessionOpen(true);
+              }
+            }}
             className="px-3.5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs flex items-center gap-1.5 cursor-pointer shadow-xs transition-all hover:scale-[1.01]"
           >
             <Receipt className="w-3.5 h-3.5 text-slate-300" />
-            <span>Close Shift</span>
+            <span>{activeSession ? "Close Shift" : "Start Shift"}</span>
           </button>
         </div>
       </div>
@@ -416,10 +699,31 @@ export function OwnerPOSView() {
             <div>
               <label className="text-xs font-semibold text-slate-700 block mb-1">Select Customer</label>
               <select
-                value={selectedCustomerId}
-                onChange={(e) => setSelectedCustomerId(e.target.value)}
+                value={selectedCustomerId || "walk_in"}
+                onChange={(e) => {
+                  const custId = e.target.value;
+                  setSelectedCustomerId(custId);
+                  if (custId === "walk_in") {
+                    setCurrentCustomer(WALK_IN_CUSTOMER);
+                    if (typeof window !== "undefined") {
+                      const url = new URL(window.location.href);
+                      url.searchParams.delete("customerId");
+                      url.searchParams.delete("customer_id");
+                      window.history.replaceState(null, "", url.toString());
+                    }
+                  } else {
+                    const found = customers.find((c) => c.id === custId);
+                    if (found) setCurrentCustomer(found);
+                    if (typeof window !== "undefined") {
+                      const url = new URL(window.location.href);
+                      url.searchParams.set("customerId", custId);
+                      window.history.replaceState(null, "", url.toString());
+                    }
+                  }
+                }}
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
               >
+                <option value="walk_in">🚶 Walk-in Customer (Guest)</option>
                 {customers.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name} ({c.phone}) - {c.membershipTier || "Regular"}
@@ -492,11 +796,10 @@ export function OwnerPOSView() {
                   key={tab.id}
                   type="button"
                   onClick={() => setSelectedAudienceFilter(tab.id as any)}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    selectedAudienceFilter === tab.id
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${selectedAudienceFilter === tab.id
                       ? "bg-white text-slate-900 shadow-xs ring-1 ring-slate-900/5"
                       : "text-slate-600 hover:text-slate-900"
-                  }`}
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -508,11 +811,10 @@ export function OwnerPOSView() {
               <button
                 type="button"
                 onClick={() => setSelectedCategory("all")}
-                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  selectedCategory === "all"
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${selectedCategory === "all"
                     ? "bg-slate-900 text-white shadow-xs"
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
+                  }`}
               >
                 All Categories
               </button>
@@ -521,11 +823,10 @@ export function OwnerPOSView() {
                   key={cat.id}
                   type="button"
                   onClick={() => setSelectedCategory(cat.id)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                    selectedCategory === cat.id
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${selectedCategory === cat.id
                       ? "bg-emerald-600 text-white shadow-xs"
                       : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                  }`}
+                    }`}
                 >
                   {cat.name}
                 </button>
@@ -589,11 +890,10 @@ export function OwnerPOSView() {
                                   [s.id]: v.audience,
                                 }))
                               }
-                              className={`px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider transition-all cursor-pointer ${
-                                isSelected
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider transition-all cursor-pointer ${isSelected
                                   ? "bg-slate-900 text-white shadow-2xs"
                                   : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                              }`}
+                                }`}
                             >
                               {v.audience} (₹{v.price})
                             </button>
@@ -662,10 +962,10 @@ export function OwnerPOSView() {
                                 {v.audience === "men"
                                   ? "👨 Men"
                                   : v.audience === "women"
-                                  ? "👩 Women"
-                                  : v.audience === "kids"
-                                  ? "🧒 Kids"
-                                  : "✨ Unisex"}
+                                    ? "👩 Women"
+                                    : v.audience === "kids"
+                                      ? "🧒 Kids"
+                                      : "✨ Unisex"}
                               </option>
                             ))
                           ) : (
@@ -673,10 +973,10 @@ export function OwnerPOSView() {
                               {computed.audience === "men"
                                 ? "👨 Men"
                                 : computed.audience === "women"
-                                ? "👩 Women"
-                                : computed.audience === "kids"
-                                ? "🧒 Kids"
-                                : "✨ Unisex"}
+                                  ? "👩 Women"
+                                  : computed.audience === "kids"
+                                    ? "🧒 Kids"
+                                    : "✨ Unisex"}
                             </option>
                           )}
                         </select>
@@ -826,11 +1126,10 @@ export function OwnerPOSView() {
                   <button
                     key={mode.id}
                     onClick={() => setPaymentMode(mode.id as any)}
-                    className={`py-2 rounded-xl font-semibold capitalize transition-all cursor-pointer ${
-                      paymentMode === mode.id
+                    className={`py-2 rounded-xl font-semibold capitalize transition-all cursor-pointer ${paymentMode === mode.id
                         ? "bg-emerald-600 text-white shadow-xs"
                         : "bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200"
-                    }`}
+                      }`}
                   >
                     {mode.label}
                   </button>
@@ -850,10 +1149,61 @@ export function OwnerPOSView() {
         </div>
       </div>
 
+      {/* Open Shift / Register Float Modal */}
+      {isOpeningSessionOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-5 animate-in zoom-in-95 duration-150 border border-slate-200">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center">
+                  <DollarSign className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-lg text-slate-900">Open Register Shift</h3>
+                  <p className="text-[11px] text-slate-400">Set opening cash float for register drawer</p>
+                </div>
+              </div>
+            </div>
+
+            <form onSubmit={handleOpenShift} className="space-y-4 text-xs">
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Opening Cash Float (₹) *</label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  step="any"
+                  value={openingCashInput}
+                  onChange={(e) => setOpeningCashInput(e.target.value)}
+                  placeholder="Enter initial drawer cash, e.g. 5000"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 text-sm"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsOpeningSessionOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-semibold hover:bg-slate-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold cursor-pointer shadow-sm"
+                >
+                  Open Shift
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Petty Cash Expense Modal */}
       {isPettyCashOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-5 animate-in zoom-in-95 duration-150 border border-slate-200">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl space-y-5 animate-in zoom-in-95 duration-150 border border-slate-200 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
                 <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center">
@@ -870,15 +1220,18 @@ export function OwnerPOSView() {
               <div>
                 <label className="font-semibold text-slate-700 block mb-1">Expense Category *</label>
                 <select
+                  required
                   value={pettyCashCategory}
                   onChange={(e) => setPettyCashCategory(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
                 >
+                  <option value="">-- Select Expense Category --</option>
                   <option value="Tea & Refreshments">Tea & Client Refreshments</option>
                   <option value="Salon Cleaning & Laundry">Salon Cleaning & Towel Laundry</option>
                   <option value="Local Courier & Transport">Local Courier & Transport</option>
                   <option value="Staff Welfare & Snacks">Staff Welfare & Snacks</option>
                   <option value="Emergency Supplies & Repairs">Emergency Supplies & Repairs</option>
+                  <option value="Miscellaneous Expenses">Miscellaneous Expenses</option>
                 </select>
               </div>
 
@@ -887,8 +1240,11 @@ export function OwnerPOSView() {
                 <input
                   type="number"
                   required
+                  min="1"
+                  step="any"
                   value={pettyCashAmount}
-                  onChange={(e) => setPettyCashAmount(Number(e.target.value))}
+                  onChange={(e) => setPettyCashAmount(e.target.value)}
+                  placeholder="Enter disbursement amount..."
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
                 />
               </div>
@@ -905,6 +1261,18 @@ export function OwnerPOSView() {
                 />
               </div>
 
+              <div>
+                <label className="font-semibold text-slate-700 block mb-1">Approved By *</label>
+                <input
+                  type="text"
+                  required
+                  value={pettyCashApprovedBy}
+                  onChange={(e) => setPettyCashApprovedBy(e.target.value)}
+                  placeholder="Manager / Cashier Name"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+                />
+              </div>
+
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
@@ -915,12 +1283,42 @@ export function OwnerPOSView() {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold cursor-pointer shadow-sm"
+                  disabled={isSubmittingPettyCash}
+                  className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-semibold cursor-pointer shadow-sm"
                 >
-                  Disburse Cash
+                  {isSubmittingPettyCash ? "Recording..." : "Disburse Cash"}
                 </button>
               </div>
             </form>
+
+            {/* Live Database Petty Cash Vouchers */}
+            {pettyCashList.length > 0 && (
+              <div className="pt-3 border-t border-slate-100 space-y-2">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                  Disbursed Vouchers ({pettyCashList.length})
+                </span>
+                <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+                  {pettyCashList.map((pc: any) => (
+                    <div
+                      key={pc.id || pc.voucher_no}
+                      className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200/70 text-[11px]"
+                    >
+                      <div>
+                        <div className="font-bold text-slate-900">
+                          {pc.voucher_no} &bull; <span className="font-normal text-slate-600">{pc.category}</span>
+                        </div>
+                        <div className="text-[10px] text-slate-400">
+                          Paid to: <span className="font-medium text-slate-700">{pc.paid_to}</span> ({pc.date})
+                        </div>
+                      </div>
+                      <span className="font-mono font-bold text-rose-600">
+                        -₹{Number(pc.amount || 0).toLocaleString()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -946,7 +1344,7 @@ export function OwnerPOSView() {
                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/70 space-y-2">
                   <div className="flex justify-between text-slate-600">
                     <span>Opening Cash Float:</span>
-                    <span className="font-mono font-bold text-slate-900">₹{openingFloat.toLocaleString()}</span>
+                    <span className="font-mono font-bold text-slate-900">₹{(openingFloat ?? 0).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between text-slate-600">
                     <span>Petty Cash Deductions:</span>
@@ -955,7 +1353,7 @@ export function OwnerPOSView() {
                   <div className="flex justify-between text-slate-900 font-semibold border-t border-slate-200 pt-2">
                     <span>Expected Cash in Drawer:</span>
                     <span className="font-mono font-bold text-emerald-700">
-                      ₹{(openingFloat - totalPettyCash).toLocaleString()}
+                      ₹{Math.max(0, (openingFloat ?? 0) - totalPettyCash).toLocaleString()}
                     </span>
                   </div>
                 </div>
@@ -982,15 +1380,20 @@ export function OwnerPOSView() {
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold cursor-pointer shadow-sm"
+                    disabled={isClosingShift}
+                    className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white font-semibold cursor-pointer shadow-sm"
                   >
-                    Generate Z-Report
+                    {isClosingShift ? "Closing..." : "Generate Z-Report"}
                   </button>
                 </div>
               </form>
             ) : (
               <div className="space-y-4 text-xs">
                 <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-200 space-y-2">
+                  <div className="flex justify-between text-slate-700">
+                    <span>Session:</span>
+                    <span className="font-mono font-bold">{shiftReport.sessionCode}</span>
+                  </div>
                   <div className="flex justify-between text-slate-700">
                     <span>Status:</span>
                     <span className="font-bold uppercase text-emerald-800">{shiftReport.status}</span>
@@ -1009,9 +1412,10 @@ export function OwnerPOSView() {
 
                 <button
                   onClick={() => {
-                    addToast("success", "Shift Closed", "Z-Report printed and session locked.");
+                    addToast("success", "Shift Closed", "Z-Report saved and session closed.");
                     setIsCloseShiftOpen(false);
                     setShiftReport(null);
+                    setClosingCashInput("");
                   }}
                   className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs cursor-pointer"
                 >

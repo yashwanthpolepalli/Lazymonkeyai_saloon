@@ -71,12 +71,17 @@ export function StaffPortal() {
       {/* Staff Header */}
       <div className="p-6 rounded-2xl bg-stone-900 text-stone-100 border border-stone-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
         <div className="flex items-center gap-4">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={currentStaff.avatar}
-            alt={currentStaff.name}
-            className="w-16 h-16 rounded-2xl object-cover border-2 border-amber-400"
-          />
+          {currentStaff.avatar && !currentStaff.avatar.includes("unsplash.com") ? (
+            <img
+              src={currentStaff.avatar}
+              alt={currentStaff.name}
+              className="w-16 h-16 rounded-2xl object-cover border-2 border-amber-400"
+            />
+          ) : (
+            <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border-2 border-amber-400 flex items-center justify-center text-amber-400 font-bold text-xl shadow-md">
+              {(currentStaff.name || "S").charAt(0).toUpperCase()}
+            </div>
+          )}
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold text-stone-100">{currentStaff.name}</h1>

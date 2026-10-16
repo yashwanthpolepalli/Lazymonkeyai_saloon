@@ -75,6 +75,14 @@ class AttendanceClockResponse(BaseModel):
     active_shift_hours: float
     record_id: Optional[str] = None
 
+class AttendanceManualCreate(BaseModel):
+    employee_id: str
+    date: str
+    check_in: str
+    check_out: Optional[str] = None
+    status: str = "present"
+    working_hours: float = 0.0
+
 class AttendanceRecordResponse(BaseModel):
     id: str
     employee_id: str

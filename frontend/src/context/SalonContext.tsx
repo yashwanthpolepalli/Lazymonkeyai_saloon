@@ -54,7 +54,7 @@ import {
   MOCK_MEMBERSHIPS,
   DEFAULT_TIME_SLOTS,
 } from "@/data/mockData";
-import { generateId } from "@/lib/utils";
+import { generateId, normalizeSlotTime, sortTimeSlots } from "@/lib/utils";
 import {
   BranchService,
   SalonCatalogService,
@@ -372,8 +372,8 @@ const SalonContext = createContext<SalonContextType>(defaultSalonContext);
 const loadFromStorage = <T,>(key: string, fallback: T): T => {
   if (typeof window === "undefined") return fallback;
   try {
-    // Purge legacy mock data cache once
-    if (!localStorage.getItem("salon_data_version_v4_clean")) {
+    // Purge legacy mock data and hardcoded profile avatar cache once
+    if (!localStorage.getItem("salon_data_version_v5_clean_avatars")) {
       const legacyKeys = [
         "salon_services",
         "salon_branches",
@@ -394,23 +394,244 @@ const loadFromStorage = <T,>(key: string, fallback: T): T => {
         "salon_audit_logs",
         "salon_service_allocations",
         "salon_current_organization",
+        "salon_owner_profile",
+        "salon_current_customer",
+        "salon_customization_settings",
       ];
       legacyKeys.forEach((k) => localStorage.removeItem(k));
-      localStorage.setItem("salon_data_version_v4_clean", "true");
+
+      // Also clean any hardcoded unsplash avatar from salon_current_user if present
+      const storedUser = localStorage.getItem("salon_current_user");
+      if (storedUser) {
+        try {
+          const parsed = JSON.parse(storedUser);
+          if (parsed.avatar && parsed.avatar.includes("unsplash.com")) {
+            parsed.avatar = "";
+            localStorage.setItem("salon_current_user", JSON.stringify(parsed));
+          }
+        } catch {}
+      }
+
+      localStorage.setItem("salon_data_version_v5_clean_avatars", "true");
     }
 
     const item = localStorage.getItem(key);
-    return item ? JSON.parse(item) : fallback;
+    if (item === null || item === undefined) return fallback;
+    try {
+      return JSON.parse(item);
+    } catch {
+      // If the stored item is a plain string (like "customers" or "owner") that was not JSON-encoded:
+      if (typeof fallback === "string" || typeof item === "string") {
+        return item as unknown as T;
+      }
+      return fallback;
+    }
   } catch {
     return fallback;
   }
 };
 
+export const ROLE_VALID_SUBTABS: Record<string, string[]> = {
+  customer: [
+    "booking",
+    "services",
+    "memberships",
+    "wallet",
+    "payment",
+    "invoices",
+  ],
+  staff: [
+    "dashboard",
+    "customers",
+    "services",
+    "inventory",
+    "attendance",
+    "payrolls",
+  ],
+  cashier: [
+    "dashboard",
+    "customers",
+    "pos",
+    "services",
+    "inventory",
+  ],
+  auditor: [
+    "dashboard",
+    "customers",
+    "pos",
+    "inventory",
+    "staff",
+    "employees",
+    "payroll",
+    "payrolls",
+    "salary_structure",
+    "payroll_processing",
+    "pf",
+    "esi",
+    "tds",
+    "payslips",
+    "payslip_studio",
+  ],
+  branch_manager: [
+    "dashboard",
+    "customers",
+    "staff",
+    "employees",
+    "attendance",
+    "daily_attendance",
+    "biometric",
+    "face_recognition",
+    "gps_attendance",
+    "shift_attendance",
+    "attendance_corrections",
+    "leave",
+    "leaves",
+    "leave_requests",
+    "leave_balances",
+    "leave_policy",
+    "holidays",
+    "payroll",
+    "salary_structure",
+    "payroll_processing",
+    "commissions",
+    "pos",
+    "services",
+    "memberships",
+    "inventory",
+    "settings",
+    "profile",
+    "branches",
+    "customizations",
+    "mfa",
+    "discounts",
+    "governance",
+    "data-hub",
+    "integrations",
+  ],
+  admin: [
+    "dashboard",
+    "organizations",
+    "finance",
+    "analytics",
+    "catalog",
+    "ai",
+    "support",
+    "system",
+  ],
+  super_admin: [
+    "dashboard",
+    "organizations",
+    "finance",
+    "analytics",
+    "catalog",
+    "ai",
+    "support",
+    "system",
+  ],
+  owner: [
+    "dashboard",
+    "customers",
+    "staff",
+    "employees",
+    "attendance",
+    "daily_attendance",
+    "biometric",
+    "face_recognition",
+    "gps_attendance",
+    "shift_attendance",
+    "attendance_corrections",
+    "leave",
+    "leaves",
+    "leave_requests",
+    "leave_balances",
+    "leave_policy",
+    "holidays",
+    "payroll",
+    "salary_structure",
+    "payroll_processing",
+    "pf",
+    "esi",
+    "tds",
+    "payslips",
+    "payslip_studio",
+    "loans",
+    "advances",
+    "bonuses",
+    "commissions",
+    "pos",
+    "services",
+    "memberships",
+    "inventory",
+    "governance",
+    "settings",
+    "profile",
+    "branches",
+    "customizations",
+    "mfa",
+    "discounts",
+    "data-hub",
+    "integrations",
+  ],
+  director: [
+    "dashboard",
+    "customers",
+    "staff",
+    "employees",
+    "attendance",
+    "daily_attendance",
+    "biometric",
+    "face_recognition",
+    "gps_attendance",
+    "shift_attendance",
+    "attendance_corrections",
+    "leave",
+    "leaves",
+    "leave_requests",
+    "leave_balances",
+    "leave_policy",
+    "holidays",
+    "payroll",
+    "salary_structure",
+    "payroll_processing",
+    "pf",
+    "esi",
+    "tds",
+    "payslips",
+    "payslip_studio",
+    "loans",
+    "advances",
+    "bonuses",
+    "commissions",
+    "pos",
+    "services",
+    "memberships",
+    "inventory",
+    "governance",
+    "settings",
+    "profile",
+    "branches",
+    "customizations",
+    "mfa",
+    "discounts",
+    "data-hub",
+    "integrations",
+  ],
+};
+
+export const getDefaultSubTabForRole = (role: string): string => {
+  return role === "customer" ? "booking" : "dashboard";
+};
+
+export const isValidSubTabForRole = (role: string, tab: string): boolean => {
+  const allowed = ROLE_VALID_SUBTABS[role] || ROLE_VALID_SUBTABS.owner;
+  return allowed.includes(tab);
+};
+
 export function SalonProvider({ children }: { children: React.ReactNode }) {
   const [activeRole, setActiveRole] = useState<Role>(() => {
-    const savedUser = loadFromStorage("salon_current_user", null);
+    const savedUser = loadFromStorage<AuthUser | null>("salon_current_user", null);
     if (savedUser && savedUser.role) return savedUser.role;
-    return loadFromStorage("salon_active_role", "owner");
+    return loadFromStorage<Role>("salon_active_role", "owner");
   });
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() =>
     loadFromStorage("salon_current_user", null)
@@ -442,9 +663,18 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
     loadFromStorage("salon_selected_branch_id", "")
   );
   const [activeModule, setActiveModule] = useState<OwnerModule>("workspace");
-  const [activeSubTab, setActiveSubTab] = useState<string>(() =>
-    loadFromStorage("salon_active_subtab", "overview")
-  );
+  const [activeSubTab, setActiveSubTab] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const urlTab = params.get("tab") || window.location.hash.replace(/^#/, "");
+      if (urlTab) return urlTab;
+    }
+    const saved = loadFromStorage<string>("salon_active_subtab", "");
+    if (saved && saved !== "overview") return saved;
+    const savedUser = loadFromStorage<AuthUser | null>("salon_current_user", null);
+    const role: Role = savedUser?.role || loadFromStorage<Role>("salon_active_role", "owner");
+    return getDefaultSubTabForRole(role);
+  });
   const [selectedDate, setSelectedDate] = useState<string>(
     new Date().toISOString().split("T")[0]
   );
@@ -541,7 +771,7 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
   const [currentCustomer, setCurrentCustomer] = useState<Customer>(() =>
     loadFromStorage("salon_current_customer", {
       id: "",
-      name: "Guest Client",
+      name: "",
       email: "",
       phone: "",
       avatar: "",
@@ -609,9 +839,20 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
   const [invoices, setInvoices] = useState<Invoice[]>(() =>
     loadFromStorage("salon_invoices", [])
   );
-  const [timeSlots, setTimeSlots] = useState<TimeSlotConfig[]>(() =>
-    loadFromStorage("salon_timeslots", DEFAULT_TIME_SLOTS)
-  );
+  const [timeSlots, setTimeSlots] = useState<TimeSlotConfig[]>(() => {
+    const loaded = loadFromStorage<TimeSlotConfig[]>("salon_timeslots", DEFAULT_TIME_SLOTS);
+    const base = Array.isArray(loaded) && loaded.length > 0 ? loaded : DEFAULT_TIME_SLOTS;
+    return sortTimeSlots(
+      base.map((slot) => ({
+        ...slot,
+        isAvailable: true,
+        blockedReason: undefined,
+        slotType: "regular",
+        allowedGenders: ["women", "men", "kids", "unisex"],
+        allowedCategories: ["all"],
+      }))
+    );
+  });
   const [cart, setCart] = useState<CartItem[]>([]);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
@@ -737,6 +978,14 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
               },
         }));
         setCustomers(normalizedCustomers);
+        if (normalizedCustomers.length > 0) {
+          setCurrentCustomer((prev) => {
+            if (!prev?.id || !normalizedCustomers.some((c: any) => c.id === prev.id)) {
+              return normalizedCustomers[0];
+            }
+            return prev;
+          });
+        }
       }
       if (remoteAppointments.status === "fulfilled") {
         setAppointments(remoteAppointments.value || []);
@@ -1085,10 +1334,28 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== "undefined" && activeSubTab) {
       try {
         localStorage.setItem("salon_active_subtab", activeSubTab);
+        const url = new URL(window.location.href);
+        if (url.searchParams.get("tab") !== activeSubTab) {
+          url.searchParams.set("tab", activeSubTab);
+          window.history.replaceState(null, "", url.toString());
+        }
       } catch (e) {
         console.error(e);
       }
     }
+  }, [activeSubTab]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handlePopState = () => {
+      const params = new URLSearchParams(window.location.search);
+      const tabFromUrl = params.get("tab");
+      if (tabFromUrl && tabFromUrl !== activeSubTab) {
+        setActiveSubTab(tabFromUrl);
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
   }, [activeSubTab]);
 
   const setOrganization = (org: Organization) => {
@@ -1227,6 +1494,12 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
     }
     if (user.role) {
       setActiveRole(user.role);
+      setActiveSubTab((prev) => {
+        if (prev && isValidSubTabForRole(user.role, prev)) {
+          return prev;
+        }
+        return getDefaultSubTabForRole(user.role);
+      });
     }
     if (user.organization_id) {
       const foundOrg = organizations.find((o) => o.id === user.organization_id);
@@ -1248,6 +1521,15 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem("salon_active_role");
       localStorage.removeItem("salon_selected_branch_id");
       localStorage.removeItem("salon_active_subtab");
+      localStorage.removeItem("salon_settings_tab");
+      localStorage.removeItem("salon_customers_tab");
+      localStorage.removeItem("salon_inventory_tab");
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("tab");
+        url.searchParams.delete("subtab");
+        window.history.replaceState(null, "", url.pathname);
+      } catch {}
     }
     addToast("info", "Signed Out", "You have successfully logged out.");
   };
@@ -1491,18 +1773,36 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
     allowedCategories: string[] = ["all"],
     slotType: any = "regular"
   ) => {
-    const newSlot: TimeSlotConfig = {
-      id: generateId("slot"),
-      time,
-      isAvailable: true,
-      branchId,
-      stylistId,
-      allowedGenders,
-      allowedCategories,
-      slotType,
-    };
-    setTimeSlots((prev) => [...prev, newSlot]);
-    addToast("success", "Custom Slot Added", `New time slot ${time} is now active.`);
+    const formattedTime = normalizeSlotTime(time) || time;
+    setTimeSlots((prev) => {
+      const existingIndex = prev.findIndex(
+        (s) => s.time.toLowerCase() === formattedTime.toLowerCase()
+      );
+      if (existingIndex >= 0) {
+        const updated = [...prev];
+        updated[existingIndex] = {
+          ...updated[existingIndex],
+          isAvailable: true,
+          blockedReason: undefined,
+          allowedGenders,
+          allowedCategories,
+          slotType,
+        };
+        return sortTimeSlots(updated);
+      }
+      const newSlot: TimeSlotConfig = {
+        id: generateId("slot"),
+        time: formattedTime,
+        isAvailable: true,
+        branchId,
+        stylistId,
+        allowedGenders,
+        allowedCategories,
+        slotType,
+      };
+      return sortTimeSlots([...prev, newSlot]);
+    });
+    addToast("success", "Custom Slot Added", `New time slot ${formattedTime} is now active and unblocked.`);
   };
 
   const deleteSlot = (slotId: string) => {
@@ -1961,36 +2261,41 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
   };
 
   const addCustomer = (customerData: Partial<Customer>): Customer => {
+    // Resolve preferred branch ID (ensure it exists in loaded branches, otherwise undefined)
+    const branchCandidate = customerData.preferredBranchId || selectedBranchId || "";
+    const validBranch = branches.find((b) => b.id === branchCandidate) || branches[0] || null;
+    const resolvedBranchId = validBranch ? validBranch.id : undefined;
+
     const newCust: Customer = {
       id: generateId("cust"),
-      name: customerData.name || "Guest Customer",
+      name: customerData.name || "",
       email: customerData.email || "",
       phone: customerData.phone || "",
       avatar: customerData.avatar || "",
       gender: (customerData.gender as any) || "female",
-      joinedDate: new Date().toISOString().split("T")[0],
-      preferredBranchId: selectedBranchId,
-      walletBalance: customerData.walletBalance || 0,
-      loyaltyPoints: customerData.loyaltyPoints || 100,
-      membershipTier: customerData.membershipTier || "Rose Silver",
-      packages: [],
-      beautyProfile: {
-        hairType: "Straight / Fine",
-        hairTexture: "Silky",
-        scalpCondition: "Normal",
-        skinType: "Hydrated",
+      joinedDate: customerData.joinedDate || new Date().toISOString().split("T")[0],
+      preferredBranchId: resolvedBranchId || "",
+      walletBalance: customerData.walletBalance ?? 0,
+      loyaltyPoints: customerData.loyaltyPoints ?? 0,
+      membershipTier: customerData.membershipTier || "Standard",
+      packages: customerData.packages || [],
+      beautyProfile: customerData.beautyProfile || {
+        hairType: "",
+        hairTexture: "",
+        scalpCondition: "",
+        skinType: "",
         skinConcerns: [],
         allergies: [],
-        preferredBeverage: "Cappuccino",
-        preferredMusic: "Lounge Jazz",
-        lastConsultationDate: new Date().toISOString().split("T")[0],
+        preferredBeverage: "",
+        preferredMusic: "",
+        lastConsultationDate: "",
       },
-      totalSpent: 0,
-      totalSpend: 0,
-      visitsCount: 1,
-      totalVisits: 1,
-      segment: "New Customer",
-      tags: ["Walk-in"],
+      totalSpent: customerData.totalSpent ?? 0,
+      totalSpend: customerData.totalSpend ?? 0,
+      visitsCount: customerData.visitsCount ?? 0,
+      totalVisits: customerData.totalVisits ?? 0,
+      segment: customerData.segment || "New Customer",
+      tags: customerData.tags || [],
       notes: customerData.notes || "",
     };
     setCustomers((prev) => [newCust, ...prev]);
@@ -2000,44 +2305,50 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
       name: newCust.name,
       phone: newCust.phone,
       gender: newCust.gender as any,
-      email: newCust.email,
+      email: newCust.email || undefined,
       tier: newCust.membershipTier,
       notes: newCust.notes,
-      preferred_branch_id: newCust.preferredBranchId,
-    }).catch(() => {});
+      preferred_branch_id: resolvedBranchId,
+    }).catch((err) => {
+      console.error("[CRM] Customer creation sync error:", err);
+    });
 
     addToast("success", "Customer Created", `${newCust.name} has been enrolled in the Salon CRM.`);
     return newCust;
   };
 
   const addEmployee = (empData: Partial<Employee>): Employee => {
+    const branchCandidate = empData.branchId || selectedBranchId || "";
+    const validBranch = branches.find((b) => b.id === branchCandidate) || branches[0] || null;
+    const resolvedBranchId = validBranch ? validBranch.id : (branches[0]?.id || "");
+
     const newEmp: Employee = {
       id: generateId("emp"),
-      name: empData.name || "New Artisan",
-      code: empData.code || `EMP-000${employees.length + 1}`,
+      name: empData.name || "",
+      code: empData.code || "",
       email: empData.email || "",
       phone: empData.phone || "",
       avatar: empData.avatar || "",
-      branchId: empData.branchId || selectedBranchId,
-      department: empData.department || "Hair Styling",
-      designation: empData.designation || "—",
-      tier: empData.tier || "senior",
+      branchId: resolvedBranchId,
+      department: empData.department || "",
+      designation: empData.designation || "",
+      tier: empData.tier || ("" as any),
       joinDate: empData.joinDate || new Date().toISOString().split("T")[0],
-      salaryBase: empData.salaryBase || 0,
-      basicSalary: empData.basicSalary || 0,
-      hra: empData.hra || 0,
-      allowances: empData.allowances || 0,
-      statutoryDed: empData.statutoryDed || 0,
-      netTakeHome: empData.netTakeHome || 0,
-      commissionRate: empData.commissionRate || 0,
-      status: "active",
-      employmentType: empData.employmentType || "Full-Time",
+      salaryBase: empData.salaryBase ?? 0,
+      basicSalary: empData.basicSalary ?? 0,
+      hra: empData.hra ?? 0,
+      allowances: empData.allowances ?? 0,
+      statutoryDed: empData.statutoryDed ?? 0,
+      netTakeHome: empData.netTakeHome ?? 0,
+      commissionRate: empData.commissionRate ?? 0,
+      status: empData.status || "active",
+      employmentType: empData.employmentType || "",
       skills: empData.skills || [],
-      documentsSubmitted: [],
-      performanceRating: 5.0,
-      monthlyCommission: 0,
-      shiftsThisMonth: 0,
-      leaveBalance: 0,
+      documentsSubmitted: empData.documentsSubmitted || [],
+      performanceRating: empData.performanceRating ?? 0,
+      monthlyCommission: empData.monthlyCommission ?? 0,
+      shiftsThisMonth: empData.shiftsThisMonth ?? 0,
+      leaveBalance: empData.leaveBalance ?? 0,
     };
     setEmployees((prev) => [newEmp, ...prev]);
 
@@ -2106,16 +2417,16 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
 
 
   const bulkAddServices = (newItems: Partial<Service>[], replace: boolean = false) => {
-    const prepared: Service[] = newItems.map((item, idx) => ({
+    const prepared: Service[] = newItems.map((item) => ({
       id: item.id || generateId("srv"),
-      name: item.name || `Service ${idx + 1}`,
-      categoryId: item.categoryId || "cat_hair",
-      categoryName: item.categoryName || "Hair Couture & Styling",
+      name: item.name || "",
+      categoryId: item.categoryId || "",
+      categoryName: item.categoryName || "",
       basePrice: item.basePrice || 0,
-      durationMinutes: item.durationMinutes || 45,
+      durationMinutes: item.durationMinutes || 0,
       shortDesc: item.shortDesc || "",
       fullDesc: item.fullDesc || item.shortDesc || "",
-      gender: item.gender || ["women", "unisex"],
+      gender: item.gender || [],
       branchIds: item.branchIds || (selectedBranchId ? [selectedBranchId] : []),
       image: item.image || "",
       requiredSkills: item.requiredSkills || [],
@@ -2131,36 +2442,36 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
   };
 
   const bulkAddCustomers = (newItems: Partial<Customer>[], replace: boolean = false) => {
-    const prepared: Customer[] = newItems.map((item, idx) => ({
+    const prepared: Customer[] = newItems.map((item) => ({
       id: item.id || generateId("cust"),
-      name: item.name || `Client ${idx + 1}`,
+      name: item.name || "",
       phone: item.phone || "",
       email: item.email || "",
       avatar: item.avatar || "",
       gender: item.gender || "female",
       joinedDate: item.joinedDate || new Date().toISOString().split("T")[0],
-      preferredBranchId: selectedBranchId,
-      walletBalance: item.walletBalance || 0,
-      loyaltyPoints: item.loyaltyPoints || 100,
-      membershipTier: item.membershipTier || "Rose Silver",
-      packages: [],
-      beautyProfile: {
-        hairType: "Normal",
-        hairTexture: "Silky",
-        scalpCondition: "Normal",
-        skinType: "Hydrated",
+      preferredBranchId: item.preferredBranchId || selectedBranchId || "",
+      walletBalance: item.walletBalance ?? 0,
+      loyaltyPoints: item.loyaltyPoints ?? 0,
+      membershipTier: item.membershipTier || "Standard",
+      packages: item.packages || [],
+      beautyProfile: item.beautyProfile || {
+        hairType: "",
+        hairTexture: "",
+        scalpCondition: "",
+        skinType: "",
         skinConcerns: [],
         allergies: [],
-        preferredBeverage: "Cappuccino",
-        preferredMusic: "Lounge Jazz",
-        lastConsultationDate: new Date().toISOString().split("T")[0],
+        preferredBeverage: "",
+        preferredMusic: "",
+        lastConsultationDate: "",
       },
-      totalSpent: item.totalSpent || 0,
-      totalSpend: item.totalSpend || 0,
-      visitsCount: item.visitsCount || 1,
-      totalVisits: item.totalVisits || 1,
-      segment: item.segment || "Regular Loyalist",
-      tags: item.tags || ["Imported"],
+      totalSpent: item.totalSpent ?? 0,
+      totalSpend: item.totalSpend ?? 0,
+      visitsCount: item.visitsCount ?? 0,
+      totalVisits: item.totalVisits ?? 0,
+      segment: item.segment || "New Customer",
+      tags: item.tags || [],
       notes: item.notes || "",
       ...item,
     }));
@@ -2174,13 +2485,13 @@ export function SalonProvider({ children }: { children: React.ReactNode }) {
   };
 
   const bulkAddInventory = (newItems: Partial<InventoryProduct>[], replace: boolean = false) => {
-    const prepared: InventoryProduct[] = newItems.map((item, idx) => ({
+    const prepared: InventoryProduct[] = newItems.map((item) => ({
       id: item.id || generateId("prod"),
-      sku: item.sku || `SKU-PRD-00${idx + 1}`,
-      name: item.name || `Product ${idx + 1}`,
-      brand: item.brand || "Professional Grade",
-      category: item.category || "Hair Care",
-      unit: item.unit || "units",
+      sku: item.sku || "",
+      name: item.name || "",
+      brand: item.brand || "",
+      category: item.category || ("" as any),
+      unit: item.unit || ("" as any),
       costPrice: item.costPrice || 0,
       retailPrice: item.retailPrice || 0,
       stocksByBranch: item.stocksByBranch || (selectedBranchId ? {

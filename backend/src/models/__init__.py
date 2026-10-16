@@ -1,7 +1,7 @@
 from src.models.base import Base, TimeStampedModel
 from src.models.erp import Company, User, ERPInvoice, GeneralLedger, JournalVoucher, FixedAsset
 from src.models.salon import Branch, MasterServiceCategory, MasterService, ServiceCategory, Service, Stylist, TimeSlotConfig, SalonStation
-from src.models.customer import Customer, WalletTransaction, MembershipTier, FormulaCard, GiftVoucher
+from src.models.customer import Customer, WalletTransaction, MembershipTier, FormulaCard, GiftVoucher, WalletTopUpPack
 from src.models.appointment import Appointment
 from src.models.pos import POSRegisterSession, FreeQuantityRule, PettyCashExpense
 from src.models.inventory import InventoryProduct, StockMovement
@@ -34,6 +34,7 @@ __all__ = [
     "SalonStation",
     "Customer",
     "WalletTransaction",
+    "WalletTopUpPack",
     "MembershipTier",
     "FormulaCard",
     "GiftVoucher",
